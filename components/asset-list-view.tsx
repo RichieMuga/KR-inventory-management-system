@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef, useEffect } from "react" // Import useEffect
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { AssetCard } from "./asset-card"
@@ -30,6 +30,7 @@ export function AssetListView({ assets }: AssetListViewProps) {
   const [displaySearchTerm, setDisplaySearchTerm] = useState("")
   const [showSuggestions, setShowSuggestions] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const blurTimeoutRef = useRef<NodeJS.Timeout | null>(null) // Ref to store timeout ID
 
   const allAssets = useMemo(() => assets, [assets]) // Use the passed assets
 
@@ -76,16 +77,31 @@ export function AssetListView({ assets }: AssetListViewProps) {
   }
 
   const handleInputFocus = () => {
+    if (blurTimeoutRef.current) {
+      // Clear any pending blur timeout
+      clearTimeout(blurTimeoutRef.current)
+      blurTimeoutRef.current = null
+    }
     if (displaySearchTerm) {
       setShowSuggestions(true)
     }
   }
 
   const handleInputBlur = () => {
-    setTimeout(() => {
+    // Delay hiding suggestions to allow click on suggestion to register
+    blurTimeoutRef.current = setTimeout(() => {
       setShowSuggestions(false)
     }, 100)
   }
+
+  // Cleanup timeout on component unmount
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) {
+        clearTimeout(blurTimeoutRef.current)
+      }
+    }
+  }, [])
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
@@ -122,7 +138,11 @@ export function AssetListView({ assets }: AssetListViewProps) {
                 <div
                   key={asset.id}
                   className="px-4 py-2 cursor-pointer hover:bg-gray-100 text-sm"
-                  onMouseDown={() => handleSuggestionClick(asset)}
+                  onMouseDown={(e) => {
+                    // Prevent blur from hiding suggestions immediately
+                    e.preventDefault()
+                    handleSuggestionClick(asset)
+                  }}
                 >
                   <span className="font-medium">{asset.name}</span>
                   {asset.serialNumber && <span className="text-muted-foreground ml-2">({asset.serialNumber})</span>}
