@@ -1,5 +1,10 @@
+"use client"
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Button } from "@/components/ui/button"
+import { MoreHorizontal, Edit } from "lucide-react"
 
 interface AssetTableProps {
   assets: {
@@ -13,9 +18,10 @@ interface AssetTableProps {
     isBulk: boolean
     quantity?: number
   }[]
+  onEdit: (asset: AssetTableProps["assets"][0]) => void // Add onEdit prop
 }
 
-export function AssetTable({ assets }: AssetTableProps) {
+export function AssetTable({ assets, onEdit }: AssetTableProps) {
   const getAvailabilityColor = (availability: string) => {
     switch (availability) {
       case "Available":
@@ -43,6 +49,7 @@ export function AssetTable({ assets }: AssetTableProps) {
             <TableHead className="text-white">Keeper</TableHead>
             <TableHead className="text-white">Availability</TableHead>
             <TableHead className="text-white text-right">Quantity</TableHead>
+            <TableHead className="text-white">Actions</TableHead> {/* New column for actions */}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -59,6 +66,22 @@ export function AssetTable({ assets }: AssetTableProps) {
                 </Badge>
               </TableCell>
               <TableCell className="text-right">{asset.isBulk ? asset.quantity : "N/A"}</TableCell>
+              <TableCell>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="h-8 w-8 p-0">
+                      <span className="sr-only">Open menu</span>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => onEdit(asset)}>
+                      <Edit className="mr-2 h-4 w-4" />
+                      Edit
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
