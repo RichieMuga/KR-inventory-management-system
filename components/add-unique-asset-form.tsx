@@ -2,13 +2,22 @@
 
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { UniqueAssetSchema, type UniqueAssetFormData } from "@/lib/schemas"
+import { uniqueAssetSchema, type UniqueAssetFormData } from "@/lib/schemas"
 import { useState } from "react"
+import { Loader2 } from "lucide-react"
 
 interface AddUniqueAssetFormProps {
   open: boolean
@@ -19,14 +28,14 @@ interface AddUniqueAssetFormProps {
 export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueAssetFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const form = useForm<UniqueAssetFormData>({
-    resolver: zodResolver(UniqueAssetSchema),
+    resolver: zodResolver(uniqueAssetSchema),
     defaultValues: {
       name: "",
       serialNumber: "",
       region: "",
-      availability: "Available",
       location: "",
       keeper: "",
+      availability: "Available",
     },
   })
 
@@ -55,7 +64,7 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 <FormItem>
                   <FormLabel>Asset Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Dell Latitude Laptop" {...field} />
+                    <Input placeholder="e.g., Projector" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -94,7 +103,7 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 <FormItem>
                   <FormLabel>Location</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Office 301" {...field} />
+                    <Input placeholder="e.g., Office A, Room 101" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -107,7 +116,7 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 <FormItem>
                   <FormLabel>Keeper</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Jane Doe" {...field} />
+                    <Input placeholder="e.g., John Doe" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -136,9 +145,12 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 </FormItem>
               )}
             />
-            <Button type="submit" className="bg-kr-maroon hover:bg-kr-maroon-dark text-white" disabled={isLoading}>
-              {isLoading ? "Adding..." : "Add Asset"}
-            </Button>
+            <DialogFooter>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Add Asset
+              </Button>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>

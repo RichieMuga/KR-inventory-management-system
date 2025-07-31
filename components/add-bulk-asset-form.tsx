@@ -2,13 +2,22 @@
 
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { BulkAssetSchema, type BulkAssetFormData } from "@/lib/schemas"
+import { bulkAssetSchema, type BulkAssetFormData } from "@/lib/schemas"
 import { useState } from "react"
+import { Loader2 } from "lucide-react"
 
 interface AddBulkAssetFormProps {
   open: boolean
@@ -19,14 +28,14 @@ interface AddBulkAssetFormProps {
 export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAssetFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const form = useForm<BulkAssetFormData>({
-    resolver: zodResolver(BulkAssetSchema),
+    resolver: zodResolver(bulkAssetSchema),
     defaultValues: {
       name: "",
       quantity: 1,
       region: "",
-      availability: "Available",
       location: "",
       keeper: "",
+      availability: "Available",
     },
   })
 
@@ -55,7 +64,7 @@ export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAsset
                 <FormItem>
                   <FormLabel>Asset Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., HP Toner Cartridge" {...field} />
+                    <Input placeholder="e.g., Toner Cartridge" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -68,7 +77,7 @@ export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAsset
                 <FormItem>
                   <FormLabel>Quantity</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="e.g., 10" {...field} />
+                    <Input type="number" placeholder="e.g., 100" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -107,7 +116,7 @@ export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAsset
                 <FormItem>
                   <FormLabel>Keeper</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., John Doe" {...field} />
+                    <Input placeholder="e.g., Jane Smith" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -136,9 +145,12 @@ export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAsset
                 </FormItem>
               )}
             />
-            <Button type="submit" className="bg-kr-maroon hover:bg-kr-maroon-dark text-white" disabled={isLoading}>
-              {isLoading ? "Adding..." : "Add Asset"}
-            </Button>
+            <DialogFooter>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Add Asset
+              </Button>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>

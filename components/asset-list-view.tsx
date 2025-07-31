@@ -7,9 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { AssetCard } from "./asset-card"
 import { AssetTable } from "./asset-table"
-import { Search, PlusCircle, PackagePlus } from "lucide-react" // Import new icons
-import { AddUniqueAssetForm, type UniqueAssetFormData } from "./add-unique-asset-form" // Import new form
-import { AddBulkAssetForm, type BulkAssetFormData } from "./add-bulk-asset-form" // Import new form
+import { Search, PlusCircle, PackagePlus } from "lucide-react"
+import { AddUniqueAssetForm, type UniqueAssetFormData } from "./add-unique-asset-form"
+import { AddBulkAssetForm, type BulkAssetFormData } from "./add-bulk-asset-form"
 
 interface Asset {
   id: string
