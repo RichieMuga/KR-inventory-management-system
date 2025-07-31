@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button" // Import Button
 import { AssetCard } from "./asset-card"
 import { AssetTable } from "./asset-table"
 import { Search } from "lucide-react" // Import Search icon
+import { PlusCircle, PackagePlus } from "lucide-react"
+import { AddUniqueAssetForm, type UniqueAssetFormData } from "./add-unique-asset-form"
+import { AddBulkAssetForm, type BulkAssetFormData } from "./add-bulk-asset-form"
 
 interface Asset {
   id: string
@@ -134,6 +137,8 @@ export function AssetListView() {
   const [displaySearchTerm, setDisplaySearchTerm] = useState("") // For input field
   const [showSuggestions, setShowSuggestions] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const [showUniqueAssetModal, setShowUniqueAssetModal] = useState(false)
+  const [showBulkAssetModal, setShowBulkAssetModal] = useState(false)
 
   const allAssets = useMemo(() => MOCK_ASSETS, []) // Memoize the full list
 
@@ -162,6 +167,17 @@ export function AssetListView() {
         asset.availability.toLowerCase().includes(lowerCaseSearchTerm),
     )
   }, [searchTerm, allAssets])
+
+  const handleAddUniqueAsset = (data: UniqueAssetFormData) => {
+    console.log("Adding unique asset:", data)
+    // In a real application, you would send this data to your backend
+    setShowUniqueAssetModal(false)
+  }
+  const handleAddBulkAsset = (data: BulkAssetFormData) => {
+    console.log("Adding bulk asset:", data)
+    // In a real application, you would send this data to your backend
+    setShowBulkAssetModal(false)
+  }
 
   const handleSearch = () => {
     setSearchTerm(displaySearchTerm)
@@ -196,6 +212,22 @@ export function AssetListView() {
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-kr-maroon-dark">ICT Asset Inventory</h1>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setShowUniqueAssetModal(true)}
+            className="bg-kr-maroon hover:bg-kr-maroon-dark text-white"
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add Unique Asset
+          </Button>
+          <Button
+            onClick={() => setShowBulkAssetModal(true)}
+            className="bg-kr-maroon hover:bg-kr-maroon-dark text-white"
+          >
+            <PackagePlus className="mr-2 h-4 w-4" />
+            Add Bulk Asset
+          </Button>
+        </div>
         <div className="relative flex w-full max-w-sm md:max-w-xs">
           <Input
             type="search"
@@ -255,6 +287,12 @@ export function AssetListView() {
           <p className="text-center text-muted-foreground">No assets found matching your search.</p>
         )}
       </div>
+      <AddUniqueAssetForm
+        open={showUniqueAssetModal}
+        onOpenChange={setShowUniqueAssetModal}
+        onSuccess={handleAddUniqueAsset}
+      />
+      <AddBulkAssetForm open={showBulkAssetModal} onOpenChange={setShowBulkAssetModal} onSuccess={handleAddBulkAsset} />
     </div>
   )
 }
