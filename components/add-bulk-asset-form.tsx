@@ -1,23 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { bulkAssetSchema, type BulkAssetFormData } from "@/lib/schemas"
-import { useState } from "react"
-import { Loader2 } from "lucide-react"
 
 interface AddBulkAssetFormProps {
   open: boolean
@@ -26,7 +17,6 @@ interface AddBulkAssetFormProps {
 }
 
 export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAssetFormProps) {
-  const [isLoading, setIsLoading] = useState(false)
   const form = useForm<BulkAssetFormData>({
     resolver: zodResolver(bulkAssetSchema),
     defaultValues: {
@@ -39,13 +29,15 @@ export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAsset
     },
   })
 
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   const onSubmit = async (data: BulkAssetFormData) => {
-    setIsLoading(true)
+    setIsSubmitting(true)
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1000))
     onSuccess(data)
     form.reset()
-    setIsLoading(false)
+    setIsSubmitting(false)
   }
 
   return (
@@ -64,7 +56,7 @@ export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAsset
                 <FormItem>
                   <FormLabel>Asset Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Toner Cartridge" {...field} />
+                    <Input {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -77,7 +69,7 @@ export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAsset
                 <FormItem>
                   <FormLabel>Quantity</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="e.g., 100" {...field} />
+                    <Input type="number" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -90,7 +82,7 @@ export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAsset
                 <FormItem>
                   <FormLabel>Region</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Nairobi" {...field} />
+                    <Input {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -103,7 +95,7 @@ export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAsset
                 <FormItem>
                   <FormLabel>Location</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., IT Store Room A" {...field} />
+                    <Input {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -116,7 +108,7 @@ export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAsset
                 <FormItem>
                   <FormLabel>Keeper</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Jane Smith" {...field} />
+                    <Input {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -145,12 +137,9 @@ export function AddBulkAssetForm({ open, onOpenChange, onSuccess }: AddBulkAsset
                 </FormItem>
               )}
             />
-            <DialogFooter>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Add Asset
-              </Button>
-            </DialogFooter>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Adding..." : "Add Asset"}
+            </Button>
           </form>
         </Form>
       </DialogContent>

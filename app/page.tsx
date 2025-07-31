@@ -1,5 +1,5 @@
 import { Header } from "@/components/layout/header"
-import { AssetListView } from "@/components/asset-list-view"
+import AssetListView from "@/components/asset-list-view" // Changed to default import
 
 export default function HomePage() {
   return (
