@@ -53,18 +53,18 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Custom colors based on Kenya Railways logo
+        // Custom colors for the inventory app
+        "kr-maroon": {
+          DEFAULT: "hsl(var(--kr-maroon))",
+          dark: "hsl(var(--kr-maroon-dark))",
+        },
         "kr-orange": {
-          DEFAULT: "#FF8C00", // A vibrant orange
-          dark: "#CC7000",
+          DEFAULT: "hsl(var(--kr-orange))",
+          dark: "hsl(var(--kr-orange-dark))",
         },
         "kr-yellow": {
-          DEFAULT: "#FFD700", // A golden yellow
-          dark: "#CCA000",
-        },
-        "kr-maroon": {
-          DEFAULT: "#800000", // A deep reddish-brown
-          dark: "#600000",
+          DEFAULT: "hsl(var(--kr-yellow))",
+          dark: "hsl(var(--kr-yellow-dark))",
         },
       },
       borderRadius: {

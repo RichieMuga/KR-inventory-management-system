@@ -7,8 +7,14 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**.v0.dev',
+      },
+    ],
     unoptimized: true,
   },
-}
+};
 
-export default nextConfig
+export default nextConfig;
