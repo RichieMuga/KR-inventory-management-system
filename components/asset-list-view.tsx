@@ -4,138 +4,23 @@ import type React from "react"
 
 import { useState, useMemo, useRef } from "react"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button" // Import Button
+import { Button } from "@/components/ui/button"
 import { AssetCard } from "./asset-card"
 import { AssetTable } from "./asset-table"
-import { Search } from "lucide-react" // Import Search icon
-
-interface Asset {
-  id: string
-  name: string
-  serialNumber: string
-  region: string
-  availability: "Available" | "Assigned" | "In Repair" | "Disposed"
-  location: string
-  keeper: string
-  isBulk: boolean
-  quantity?: number
-}
-
-const MOCK_ASSETS: Asset[] = [
-  {
-    id: "1",
-    name: "HP Toner Cartridge (Black)",
-    serialNumber: "HP-TNR-BLK-001",
-    region: "Nairobi",
-    availability: "Available",
-    location: "IT Store Room A",
-    keeper: "John Doe",
-    isBulk: true,
-    quantity: 25,
-  },
-  {
-    id: "2",
-    name: "Samsung TV Remote",
-    serialNumber: "SAMS-REM-TV-002",
-    region: "Mombasa",
-    availability: "Assigned",
-    location: "Conference Room 3",
-    keeper: "Jane Smith",
-    isBulk: false,
-  },
-  {
-    id: "3",
-    name: "Epson Ink Cartridge (Cyan)",
-    serialNumber: "EPS-INK-CYN-003",
-    region: "Kisumu",
-    availability: "Available",
-    location: "IT Store Room B",
-    keeper: "Peter Jones",
-    isBulk: true,
-    quantity: 15,
-  },
-  {
-    id: "4",
-    name: "Network Cable (CAT6, 10m)",
-    serialNumber: "NET-CAB-CAT6-004",
-    region: "Nairobi",
-    availability: "Available",
-    location: "Server Room 1",
-    keeper: "Alice Brown",
-    isBulk: true,
-    quantity: 50,
-  },
-  {
-    id: "5",
-    name: "USB Flash Drive (64GB)",
-    serialNumber: "USB-FLSH-64GB-005",
-    region: "Mombasa",
-    availability: "Assigned",
-    location: "User Desk 101",
-    keeper: "David Green",
-    isBulk: false,
-  },
-  {
-    id: "6",
-    name: "Wireless Mouse (Logitech)",
-    serialNumber: "WL-MSE-LOGI-006",
-    region: "Kisumu",
-    availability: "Available",
-    location: "IT Store Room A",
-    keeper: "Sarah White",
-    isBulk: true,
-    quantity: 10,
-  },
-  {
-    id: "7",
-    name: "Standard Keyboard",
-    serialNumber: "STD-KEY-007",
-    region: "Nairobi",
-    availability: "Available",
-    location: "IT Store Room B",
-    keeper: "Michael Black",
-    isBulk: true,
-    quantity: 20,
-  },
-  {
-    id: "8",
-    name: "24-inch Dell Monitor",
-    serialNumber: "MON-DELL-24-008",
-    region: "Mombasa",
-    availability: "In Repair",
-    location: "Repair Workshop",
-    keeper: "Emily Davis",
-    isBulk: false,
-  },
-  {
-    id: "9",
-    name: "Projector (Epson)",
-    serialNumber: "PROJ-EPS-009",
-    region: "Kisumu",
-    availability: "Assigned",
-    location: "Training Room",
-    keeper: "Chris Wilson",
-    isBulk: false,
-  },
-  {
-    id: "10",
-    name: "Server Rack Unit (42U)",
-    serialNumber: "SRV-RACK-42U-010",
-    region: "Nairobi",
-    availability: "Available",
-    location: "Server Room 2",
-    keeper: "Olivia Taylor",
-    isBulk: false,
-  },
-]
+import { Search, PlusCircle } from "lucide-react"
+import { AddAssetModal } from "./add-asset-modal"
+import { useAppSelector } from "@/hooks/redux-hooks"
 
 export function AssetListView() {
+  const assets = useAppSelector((state) => state.assets.assets) // Get assets from Redux store
   const [searchTerm, setSearchTerm] = useState("")
-  const [displaySearchTerm, setDisplaySearchTerm] = useState("") // For input field
+  const [displaySearchTerm, setDisplaySearchTerm] = useState("")
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [isUniqueModalOpen, setIsUniqueModalOpen] = useState(false)
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  const allAssets = useMemo(() => MOCK_ASSETS, []) // Memoize the full list
+  const allAssets = useMemo(() => assets, [assets])
 
   const suggestions = useMemo(() => {
     if (!displaySearchTerm) return []
@@ -168,15 +53,15 @@ export function AssetListView() {
     setShowSuggestions(false)
   }
 
-  const handleSuggestionClick = (suggestion: Asset) => {
-    setDisplaySearchTerm(suggestion.name) // Or suggestion.serialNumber
-    setSearchTerm(suggestion.name) // Immediately search for the selected suggestion
+  const handleSuggestionClick = (suggestion: (typeof assets)[0]) => {
+    setDisplaySearchTerm(suggestion.name)
+    setSearchTerm(suggestion.name)
     setShowSuggestions(false)
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDisplaySearchTerm(e.target.value)
-    setShowSuggestions(true) // Show suggestions as user types
+    setShowSuggestions(true)
   }
 
   const handleInputFocus = () => {
@@ -186,7 +71,6 @@ export function AssetListView() {
   }
 
   const handleInputBlur = () => {
-    // Delay hiding suggestions to allow click on suggestion item
     setTimeout(() => {
       setShowSuggestions(false)
     }, 100)
@@ -196,45 +80,55 @@ export function AssetListView() {
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-kr-maroon-dark">ICT Asset Inventory</h1>
-        <div className="relative flex w-full max-w-sm md:max-w-xs">
-          <Input
-            type="search"
-            placeholder="Search assets by name or serial..."
-            className="flex-1 pr-10" // Add padding for the button
-            value={displaySearchTerm}
-            onChange={handleInputChange}
-            onFocus={handleInputFocus}
-            onBlur={handleInputBlur}
-            ref={searchInputRef}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                handleSearch()
-              }
-            }}
-          />
-          <Button
-            type="button"
-            size="icon"
-            className="absolute right-0 top-0 h-full rounded-l-none bg-kr-orange hover:bg-kr-orange-dark"
-            onClick={handleSearch}
-            aria-label="Search"
-          >
-            <Search className="h-4 w-4" />
+        <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+          <div className="relative flex-1">
+            <Input
+              type="search"
+              placeholder="Search assets by name or serial..."
+              className="flex-1 pr-10"
+              value={displaySearchTerm}
+              onChange={handleInputChange}
+              onFocus={handleInputFocus}
+              onBlur={handleInputBlur}
+              ref={searchInputRef}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSearch()
+                }
+              }}
+            />
+            <Button
+              type="button"
+              size="icon"
+              className="absolute right-0 top-0 h-full rounded-l-none bg-kr-orange hover:bg-kr-orange-dark"
+              onClick={handleSearch}
+              aria-label="Search"
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute z-10 top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                {suggestions.map((asset) => (
+                  <div
+                    key={asset.id}
+                    className="px-4 py-2 cursor-pointer hover:bg-gray-100 text-sm"
+                    onMouseDown={() => handleSuggestionClick(asset)}
+                  >
+                    <span className="font-medium">{asset.name}</span>
+                    <span className="text-muted-foreground ml-2">({asset.serialNumber})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <Button onClick={() => setIsUniqueModalOpen(true)} className="bg-kr-maroon hover:bg-kr-maroon-dark">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add Unique Asset
           </Button>
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-10 top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
-              {suggestions.map((asset) => (
-                <div
-                  key={asset.id}
-                  className="px-4 py-2 cursor-pointer hover:bg-gray-100 text-sm"
-                  onMouseDown={() => handleSuggestionClick(asset)} // Use onMouseDown to prevent blur
-                >
-                  <span className="font-medium">{asset.name}</span>
-                  <span className="text-muted-foreground ml-2">({asset.serialNumber})</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <Button onClick={() => setIsBulkModalOpen(true)} className="bg-kr-maroon hover:bg-kr-maroon-dark">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add Bulk Asset
+          </Button>
         </div>
       </div>
 
@@ -255,6 +149,9 @@ export function AssetListView() {
           <p className="text-center text-muted-foreground">No assets found matching your search.</p>
         )}
       </div>
+
+      <AddAssetModal isOpen={isUniqueModalOpen} onClose={() => setIsUniqueModalOpen(false)} assetType="unique" />
+      <AddAssetModal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} assetType="bulk" />
     </div>
   )
 }
