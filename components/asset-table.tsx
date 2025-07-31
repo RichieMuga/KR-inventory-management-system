@@ -5,7 +5,7 @@ interface AssetTableProps {
   assets: {
     id: string
     name: string
-    serialNumber: string
+    serialNumber?: string // Make serialNumber optional
     region: string
     availability: "Available" | "Assigned" | "In Repair" | "Disposed"
     location: string
@@ -49,7 +49,7 @@ export function AssetTable({ assets }: AssetTableProps) {
           {assets.map((asset) => (
             <TableRow key={asset.id}>
               <TableCell className="font-medium">{asset.name}</TableCell>
-              <TableCell>{asset.serialNumber}</TableCell>
+              <TableCell>{asset.serialNumber || "N/A"}</TableCell>
               <TableCell>{asset.location}</TableCell>
               <TableCell>{asset.region}</TableCell>
               <TableCell>{asset.keeper}</TableCell>
@@ -58,7 +58,7 @@ export function AssetTable({ assets }: AssetTableProps) {
                   {asset.availability}
                 </Badge>
               </TableCell>
-              <TableCell className="text-right">{asset.isBulk ? asset.quantity : "N/A"}</TableCell>
+              <TableCell className="text-right">{asset.isBulk ? asset.quantity || 0 : "N/A"}</TableCell>
             </TableRow>
           ))}
         </TableBody>
