@@ -49,7 +49,7 @@ export function AssetTable({ assets, onEdit }: AssetTableProps) {
             <TableHead className="text-white">Keeper</TableHead>
             <TableHead className="text-white">Availability</TableHead>
             <TableHead className="text-white text-right">Quantity</TableHead>
-            <TableHead className="text-white">Actions</TableHead> {/* New column for actions */}
+            <TableHead className="text-white">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
