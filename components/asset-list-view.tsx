@@ -7,12 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { AssetCard } from "./asset-card"
 import { AssetTable } from "./asset-table"
-import { Search } from "lucide-react"
-import { PlusCircle, PackagePlus } from "lucide-react"
-import { AddUniqueAssetForm, type UniqueAssetFormData } from "./add-unique-asset-form"
-import { AddBulkAssetForm, type BulkAssetFormData } from "./add-bulk-asset-form"
-import { EditUniqueAssetForm, type EditUniqueAssetFormData } from "./edit-unique-asset-form" // Import new edit forms
-import { EditBulkAssetForm, type EditBulkAssetFormData } from "./edit-bulk-asset-form" // Import new edit forms
+import { Search, PlusCircle, PackagePlus } from "lucide-react" // Import new icons
+import { AddUniqueAssetForm, type UniqueAssetFormData } from "./add-unique-asset-form" // Import new form
+import { AddBulkAssetForm, type BulkAssetFormData } from "./add-bulk-asset-form" // Import new form
 
 interface Asset {
   id: string
@@ -144,10 +141,6 @@ export function AssetListView() {
   const [showUniqueAssetModal, setShowUniqueAssetModal] = useState(false)
   const [showBulkAssetModal, setShowBulkAssetModal] = useState(false)
 
-  const [showEditUniqueAssetModal, setShowEditUniqueAssetModal] = useState(false) // New state for edit modals
-  const [showEditBulkAssetModal, setShowEditBulkAssetModal] = useState(false) // New state for edit modals
-  const [selectedAssetForEdit, setSelectedAssetForEdit] = useState<Asset | null>(null) // New state for selected asset
-
   const suggestions = useMemo(() => {
     if (!displaySearchTerm) return []
     const lowerCaseSearchTerm = displaySearchTerm.toLowerCase()
@@ -194,33 +187,6 @@ export function AssetListView() {
     }
     setAssets((prevAssets) => [...prevAssets, newAsset])
     setShowBulkAssetModal(false)
-  }
-
-  const handleEditAsset = (asset: Asset) => {
-    setSelectedAssetForEdit(asset)
-    if (asset.isBulk) {
-      setShowEditBulkAssetModal(true)
-    } else {
-      setShowEditUniqueAssetModal(true)
-    }
-  }
-
-  const handleSaveUniqueAsset = (updatedData: EditUniqueAssetFormData) => {
-    console.log("Saving unique asset changes:", updatedData)
-    setAssets((prevAssets) =>
-      prevAssets.map((asset) => (asset.id === updatedData.id ? { ...asset, ...updatedData } : asset)),
-    )
-    setShowEditUniqueAssetModal(false)
-    setSelectedAssetForEdit(null)
-  }
-
-  const handleSaveBulkAsset = (updatedData: EditBulkAssetFormData) => {
-    console.log("Saving bulk asset changes:", updatedData)
-    setAssets((prevAssets) =>
-      prevAssets.map((asset) => (asset.id === updatedData.id ? { ...asset, ...updatedData } : asset)),
-    )
-    setShowEditBulkAssetModal(false)
-    setSelectedAssetForEdit(null)
   }
 
   const handleSearch = () => {
@@ -316,7 +282,7 @@ export function AssetListView() {
       {/* Mobile View: Cards */}
       <div className="grid gap-4 md:hidden">
         {filteredAssets.length > 0 ? (
-          filteredAssets.map((asset) => <AssetCard key={asset.id} asset={asset} onEdit={handleEditAsset} />)
+          filteredAssets.map((asset) => <AssetCard key={asset.id} asset={asset} />)
         ) : (
           <p className="text-center text-muted-foreground">No assets found matching your search.</p>
         )}
@@ -325,7 +291,7 @@ export function AssetListView() {
       {/* Desktop View: Table */}
       <div className="hidden md:block">
         {filteredAssets.length > 0 ? (
-          <AssetTable assets={filteredAssets} onEdit={handleEditAsset} />
+          <AssetTable assets={filteredAssets} />
         ) : (
           <p className="text-center text-muted-foreground">No assets found matching your search.</p>
         )}
@@ -337,23 +303,6 @@ export function AssetListView() {
         onSuccess={handleAddUniqueAsset}
       />
       <AddBulkAssetForm open={showBulkAssetModal} onOpenChange={setShowBulkAssetModal} onSuccess={handleAddBulkAsset} />
-
-      {selectedAssetForEdit && !selectedAssetForEdit.isBulk && (
-        <EditUniqueAssetForm
-          open={showEditUniqueAssetModal}
-          onOpenChange={setShowEditUniqueAssetModal}
-          onSuccess={handleSaveUniqueAsset}
-          initialData={selectedAssetForEdit as EditUniqueAssetFormData}
-        />
-      )}
-      {selectedAssetForEdit && selectedAssetForEdit.isBulk && (
-        <EditBulkAssetForm
-          open={showEditBulkAssetModal}
-          onOpenChange={setShowEditBulkAssetModal}
-          onSuccess={handleSaveBulkAsset}
-          initialData={selectedAssetForEdit as EditBulkAssetFormData}
-        />
-      )}
     </div>
   )
 }

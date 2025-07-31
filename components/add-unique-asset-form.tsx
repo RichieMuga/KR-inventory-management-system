@@ -1,20 +1,14 @@
 "use client"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
 
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { uniqueAssetSchema, type UniqueAssetFormData } from "@/lib/schemas"
+import { UniqueAssetSchema, type UniqueAssetFormData } from "@/lib/schemas"
+import { useState } from "react"
 
 interface AddUniqueAssetFormProps {
   open: boolean
@@ -22,45 +16,27 @@ interface AddUniqueAssetFormProps {
   onSuccess: (data: UniqueAssetFormData) => void
 }
 
-const MOCK_REGIONS = ["Nairobi", "Mombasa", "Kisumu"]
-const MOCK_LOCATIONS = [
-  "IT Store Room A",
-  "IT Store Room B",
-  "Server Room 1",
-  "Office 101",
-  "Repair Workshop",
-  "Training Room",
-]
-const MOCK_KEEPERS = [
-  "John Doe",
-  "Jane Smith",
-  "Peter Jones",
-  "Alice Brown",
-  "David Green",
-  "Sarah White",
-  "Michael Black",
-  "Emily Davis",
-  "Chris Wilson",
-  "Olivia Taylor",
-]
-const MOCK_AVAILABILITY = ["Available", "Assigned", "In Repair", "Disposed"]
-
 export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueAssetFormProps) {
+  const [isLoading, setIsLoading] = useState(false)
   const form = useForm<UniqueAssetFormData>({
-    resolver: zodResolver(uniqueAssetSchema),
+    resolver: zodResolver(UniqueAssetSchema),
     defaultValues: {
       name: "",
       serialNumber: "",
       region: "",
+      availability: "Available",
       location: "",
       keeper: "",
-      availability: "Available",
     },
   })
 
-  const onSubmit = (data: UniqueAssetFormData) => {
+  const onSubmit = async (data: UniqueAssetFormData) => {
+    setIsLoading(true)
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 1000))
     onSuccess(data)
     form.reset()
+    setIsLoading(false)
   }
 
   return (
@@ -79,7 +55,7 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 <FormItem>
                   <FormLabel>Asset Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Projector (Epson)" {...field} />
+                    <Input placeholder="e.g., Dell Latitude Laptop" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -92,7 +68,7 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 <FormItem>
                   <FormLabel>Serial Number</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., PROJ-EPS-009" {...field} />
+                    <Input placeholder="e.g., SN123456789" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -104,20 +80,9 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Region</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a region" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {MOCK_REGIONS.map((region) => (
-                        <SelectItem key={region} value={region}>
-                          {region}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Input placeholder="e.g., Nairobi" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -128,20 +93,9 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Location</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a location" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {MOCK_LOCATIONS.map((location) => (
-                        <SelectItem key={location} value={location}>
-                          {location}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Input placeholder="e.g., Office 301" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -152,20 +106,9 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Keeper</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a keeper" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {MOCK_KEEPERS.map((keeper) => (
-                        <SelectItem key={keeper} value={keeper}>
-                          {keeper}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Input placeholder="e.g., Jane Doe" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -179,24 +122,23 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select availability status" />
+                        <SelectValue placeholder="Select availability" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {MOCK_AVAILABILITY.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="Available">Available</SelectItem>
+                      <SelectItem value="Assigned">Assigned</SelectItem>
+                      <SelectItem value="In Repair">In Repair</SelectItem>
+                      <SelectItem value="Disposed">Disposed</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <DialogFooter>
-              <Button type="submit">Add Unique Asset</Button>
-            </DialogFooter>
+            <Button type="submit" className="bg-kr-maroon hover:bg-kr-maroon-dark text-white" disabled={isLoading}>
+              {isLoading ? "Adding..." : "Add Asset"}
+            </Button>
           </form>
         </Form>
       </DialogContent>
