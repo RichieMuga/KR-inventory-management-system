@@ -13,7 +13,7 @@ export type UniqueAssetFormData = z.infer<typeof uniqueAssetSchema>
 
 export const bulkAssetSchema = z.object({
   name: z.string().min(1, "Asset name is required"),
-  quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
   region: z.string().min(1, "Region is required"),
   location: z.string().min(1, "Location is required"),
   keeper: z.string().min(1, "Keeper is required"),

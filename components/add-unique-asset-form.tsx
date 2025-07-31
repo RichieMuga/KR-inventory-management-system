@@ -3,12 +3,20 @@
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { uniqueAssetSchema, type UniqueAssetFormData } from "@/lib/schemas"
+import { Loader2 } from "lucide-react"
 
 interface AddUniqueAssetFormProps {
   open: boolean
@@ -17,6 +25,7 @@ interface AddUniqueAssetFormProps {
 }
 
 export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueAssetFormProps) {
+  const [isLoading, setIsLoading] = useState(false)
   const form = useForm<UniqueAssetFormData>({
     resolver: zodResolver(uniqueAssetSchema),
     defaultValues: {
@@ -29,15 +38,13 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
     },
   })
 
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
   const onSubmit = async (data: UniqueAssetFormData) => {
-    setIsSubmitting(true)
+    setIsLoading(true)
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1000))
     onSuccess(data)
     form.reset()
-    setIsSubmitting(false)
+    setIsLoading(false)
   }
 
   return (
@@ -56,7 +63,7 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 <FormItem>
                   <FormLabel>Asset Name</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input placeholder="e.g., Projector" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -69,7 +76,7 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 <FormItem>
                   <FormLabel>Serial Number</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input placeholder="e.g., SN123456789" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -82,7 +89,7 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 <FormItem>
                   <FormLabel>Region</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input placeholder="e.g., Nairobi" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -95,7 +102,7 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 <FormItem>
                   <FormLabel>Location</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input placeholder="e.g., Office A, Room 101" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -108,7 +115,7 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 <FormItem>
                   <FormLabel>Keeper</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input placeholder="e.g., John Doe" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -137,9 +144,12 @@ export function AddUniqueAssetForm({ open, onOpenChange, onSuccess }: AddUniqueA
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Adding..." : "Add Asset"}
-            </Button>
+            <DialogFooter>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Add Asset
+              </Button>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>
