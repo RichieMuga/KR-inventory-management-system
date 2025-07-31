@@ -1,117 +1,88 @@
-import { Header } from "@/components/layout/header"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { MovementCard } from "@/components/movement-card" // Import the new card component
+import { MovementCard } from "@/components/movement-card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Search } from "lucide-react"
 
-interface Movement {
-  id: string
-  assetName: string
-  fromLocation: string
-  toLocation: string
-  movedBy: string
-  timestamp: string
-  quantity: number
-  notes?: string
-}
-
-const MOCK_MOVEMENTS: Movement[] = [
+const MOCK_MOVEMENTS = [
   {
-    id: "M001",
-    assetName: "HP Toner Cartridge (Black)",
+    id: "1",
+    assetName: "HP Laptop Pro",
+    serialNumber: "HP-PRO-001",
+    type: "Assignment",
     fromLocation: "IT Store Room A",
-    toLocation: "Office 101",
-    movedBy: "John Doe",
-    timestamp: "2024-07-30 10:30 AM",
-    quantity: 1,
-    notes: "For printer in Office 101",
-  },
-  {
-    id: "M002",
-    assetName: "Network Cable (CAT6, 10m)",
-    fromLocation: "Server Room 1",
-    toLocation: "Office 205",
-    movedBy: "Alice Brown",
-    timestamp: "2024-07-29 02:15 PM",
-    quantity: 2,
-    notes: "New workstation setup",
-  },
-  {
-    id: "M003",
-    assetName: "24-inch Dell Monitor",
-    fromLocation: "Office 302",
-    toLocation: "Repair Workshop",
-    movedBy: "Emily Davis",
-    timestamp: "2024-07-28 11:00 AM",
-    quantity: 1,
-    notes: "Screen flickering issue",
-  },
-  {
-    id: "M004",
-    assetName: "USB Flash Drive (64GB)",
-    fromLocation: "IT Store Room B",
     toLocation: "User Desk 101",
-    movedBy: "David Green",
-    timestamp: "2024-07-27 09:45 AM",
-    quantity: 1,
-    notes: "Issued to new employee",
+    date: "2023-10-26",
+    movedBy: "John Doe",
   },
   {
-    id: "M005",
-    assetName: "Wireless Mouse (Logitech)",
-    fromLocation: "IT Store Room A",
-    toLocation: "Office 105",
-    movedBy: "Sarah White",
-    timestamp: "2024-07-26 03:00 PM",
-    quantity: 1,
-    notes: "Replacement for faulty mouse",
+    id: "2",
+    assetName: "Projector Epson",
+    serialNumber: "EPS-PROJ-002",
+    type: "Relocation",
+    fromLocation: "Conference Room 1",
+    toLocation: "Training Room",
+    date: "2023-10-25",
+    movedBy: "Jane Smith",
+  },
+  {
+    id: "3",
+    assetName: "Toner Cartridge",
+    serialNumber: "TONER-005",
+    type: "Receipt",
+    fromLocation: "Supplier",
+    toLocation: "IT Store Room B",
+    date: "2023-10-24",
+    movedBy: "Peter Jones",
+  },
+  {
+    id: "4",
+    assetName: "Monitor Dell 24-inch",
+    serialNumber: "DELL-MON-004",
+    type: "Repair",
+    fromLocation: "User Desk 105",
+    toLocation: "Repair Workshop",
+    date: "2023-10-23",
+    movedBy: "Alice Brown",
+  },
+  {
+    id: "5",
+    assetName: "Network Cable (CAT6)",
+    serialNumber: "NET-CAB-005",
+    type: "Disposal",
+    fromLocation: "Server Room 2",
+    toLocation: "E-Waste Facility",
+    date: "2023-10-22",
+    movedBy: "David Green",
   },
 ]
 
 export default function MovementsPage() {
   return (
-    <div className="flex min-h-screen w-full flex-col">
-      <Header />
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
-        <h1 className="text-3xl font-bold text-kr-maroon-dark">Inventory Movements</h1>
-
-        {/* Mobile View: Cards */}
-        <div className="grid gap-4 md:hidden">
-          {MOCK_MOVEMENTS.length > 0 ? (
-            MOCK_MOVEMENTS.map((movement) => <MovementCard key={movement.id} movement={movement} />)
-          ) : (
-            <p className="text-center text-muted-foreground">No movements found.</p>
-          )}
+    <div className="flex flex-col gap-4 p-4 md:p-6">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-kr-maroon-dark">Asset Movements</h1>
+        <div className="relative flex w-full max-w-sm md:max-w-xs">
+          <Input
+            type="search"
+            placeholder="Search movements..."
+            className="flex-1 pr-10" // Add padding for the button
+          />
+          <Button
+            type="button"
+            size="icon"
+            className="absolute right-0 top-0 h-full rounded-l-none bg-kr-orange hover:bg-kr-orange-dark"
+            aria-label="Search"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
         </div>
+      </div>
 
-        {/* Desktop View: Table */}
-        <div className="hidden md:block rounded-md border overflow-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-kr-maroon text-white hover:bg-kr-maroon">
-                <TableHead className="text-white">Asset Name</TableHead>
-                <TableHead className="text-white">From Location</TableHead>
-                <TableHead className="text-white">To Location</TableHead>
-                <TableHead className="text-white">Moved By</TableHead>
-                <TableHead className="text-white">Timestamp</TableHead>
-                <TableHead className="text-white text-right">Quantity</TableHead>
-                <TableHead className="text-white">Notes</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {MOCK_MOVEMENTS.map((movement) => (
-                <TableRow key={movement.id}>
-                  <TableCell className="font-medium">{movement.assetName}</TableCell>
-                  <TableCell>{movement.fromLocation}</TableCell>
-                  <TableCell>{movement.toLocation}</TableCell>
-                  <TableCell>{movement.movedBy}</TableCell>
-                  <TableCell>{movement.timestamp}</TableCell>
-                  <TableCell className="text-right">{movement.quantity}</TableCell>
-                  <TableCell>{movement.notes || "N/A"}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </main>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {MOCK_MOVEMENTS.map((movement) => (
+          <MovementCard key={movement.id} movement={movement} />
+        ))}
+      </div>
     </div>
   )
 }

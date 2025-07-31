@@ -1,30 +1,55 @@
-# Mobile inventory app
+# Mobile Inventory App
 
-*Automatically synced with your [v0.dev](https://v0.dev) deployments*
+This is a mobile-first inventory management application built with Next.js and shadcn/ui.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/richiemugas-projects/v0-mobile-inventory-app)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/c8YDECsiI70)
+## Features
 
-## Overview
+- **Asset Tracking**: Manage and track various ICT assets.
+- **Bulk vs. Unique Assets**: Distinguish between bulk consumables and individually tracked items using the `is_bulk` field.
+- **Responsive Design**: Optimized for both mobile and desktop views.
+- **Search Functionality**: Easily search for assets by name or serial number.
+- **Create Asset**: Add new assets to the inventory with dynamic form fields based on asset type.
 
-This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
+## Getting Started
 
-## Deployment
+1.  **Clone the repository**:
+    \`\`\`bash
+    git clone <repository-url>
+    cd mobile-inventory-app
+    \`\`\`
+2.  **Install dependencies**:
+    \`\`\`bash
+    npm install
+    # or
+    yarn install
+    \`\`\`
+3.  **Run the development server**:
+    \`\`\`bash
+    npm run dev
+    # or
+    yarn dev
+    \`\`\`
+    Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-Your project is live at:
+## Project Structure
 
-**[https://vercel.com/richiemugas-projects/v0-mobile-inventory-app](https://vercel.com/richiemugas-projects/v0-mobile-inventory-app)**
+-   `app/`: Next.js App Router pages and layouts.
+-   `components/`: Reusable React components, including shadcn/ui components.
+-   `public/`: Static assets like images.
+-   `hooks/`: Custom React hooks.
+-   `lib/`: Utility functions.
+-   `styles/`: Global CSS.
 
-## Build your app
+## Customization
 
-Continue building your app on:
+-   **Theming**: Customize the application's theme by modifying `tailwind.config.ts` and `app/globals.css`.
+-   **Data**: The application currently uses mock data. You can integrate with a backend API for real data.
 
-**[https://v0.dev/chat/projects/c8YDECsiI70](https://v0.dev/chat/projects/c8YDECsiI70)**
+## Learn More
 
-## How It Works
+To learn more about Next.js, take a look at the following resources:
 
-1. Create and modify your project using [v0.dev](https://v0.dev)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+-   [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+-   [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!

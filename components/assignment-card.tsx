@@ -1,68 +1,62 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, User, Tag } from "lucide-react"
+import { Calendar, User, Hash } from "lucide-react"
 
 interface AssignmentCardProps {
   assignment: {
     id: string
     assetName: string
+    serialNumber: string
     assignedTo: string
-    assignedBy: string
-    dateIssued: string
-    dateDue?: string
-    dateReturned?: string
-    conditionIssued: string
-    conditionReturned?: string
-    notes?: string
+    assignmentDate: string
+    returnDate: string
+    status: "Active" | "Returned" | "Overdue"
   }
 }
 
 export function AssignmentCard({ assignment }: AssignmentCardProps) {
-  const isReturned = !!assignment.dateReturned
-  const statusBadge = isReturned ? (
-    <Badge className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Returned</Badge>
-  ) : (
-    <Badge className="bg-kr-orange-dark text-white px-2 py-1 rounded-full text-xs">Outstanding</Badge>
-  )
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "Active":
+        return "bg-green-100 text-green-800"
+      case "Returned":
+        return "bg-gray-100 text-gray-800"
+      case "Overdue":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
 
   return (
-    <Card className="w-full shadow-sm hover:shadow-md transition-shadow">
+    <Card className="w-full shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-lg font-semibold text-kr-maroon-dark">{assignment.assetName}</CardTitle>
-        {statusBadge}
+        <CardTitle className="text-lg font-semibold">{assignment.assetName}</CardTitle>
+        <Badge className={`${getStatusColor(assignment.status)} px-2 py-1 rounded-full text-xs`}>
+          {assignment.status}
+        </Badge>
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
-        <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Assigned To:</span> {assignment.assignedTo}
+        <div className="flex items-center">
+          <Hash className="mr-2 h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Serial Number:</span>
+          <span className="ml-auto font-medium">{assignment.serialNumber}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Issued:</span> {assignment.dateIssued}
+        <div className="flex items-center">
+          <User className="mr-2 h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Assigned To:</span>
+          <span className="ml-auto font-medium">{assignment.assignedTo}</span>
         </div>
-        {assignment.dateDue && (
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">Due:</span> {assignment.dateDue}
-          </div>
-        )}
-        {isReturned && (
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">Returned:</span> {assignment.dateReturned}
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <Tag className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Condition (Issued):</span> {assignment.conditionIssued}
+        <div className="flex items-center">
+          <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Assignment Date:</span>
+          <span className="ml-auto font-medium">{assignment.assignmentDate}</span>
         </div>
-        {assignment.conditionReturned && (
-          <div className="flex items-center gap-2">
-            <Tag className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">Condition (Returned):</span> {assignment.conditionReturned}
-          </div>
-        )}
-        {assignment.notes && <div className="text-xs text-muted-foreground mt-1">Notes: {assignment.notes}</div>}
+        <div className="flex items-center">
+          <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Return Date:</span>
+          <span className="ml-auto font-medium">{assignment.returnDate}</span>
+        </div>
       </CardContent>
     </Card>
   )
