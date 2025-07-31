@@ -1,67 +1,30 @@
 "use client"
-
-import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/hooks/use-toast"
+import { Checkbox } from "@/components/ui/checkbox"
+import { toast } from "@/hooks/use-toast"
 
-// Mock data for dropdowns (reusing from other pages)
-const MOCK_LOCATIONS = [
-  { id: "L001", regionName: "Nairobi", departmentName: "IT Store Room A", notes: "Main IT storage" },
-  { id: "L002", regionName: "Nairobi", departmentName: "IT Store Room B", notes: "Secondary IT storage" },
-  { id: "L003", regionName: "Nairobi", departmentName: "Server Room 1", notes: "Primary data center" },
-  { id: "L004", regionName: "Nairobi", departmentName: "Server Room 2", notes: "Secondary data center" },
-  { id: "L005", regionName: "Nairobi", departmentName: "Office 101", notes: "General office space" },
-  { id: "L006", regionName: "Mombasa", departmentName: "Workshop 3", notes: "Repair and maintenance workshop" },
-  { id: "L007", regionName: "Mombasa", departmentName: "Conference Room 3", notes: "Meeting room" },
-  { id: "L008", regionName: "Kisumu", departmentName: "Tool Crib", notes: "Tools and small equipment storage" },
-  { id: "L009", regionName: "Kisumu", departmentName: "Training Room", notes: "Employee training facility" },
-  { id: "L010", regionName: "Kisumu", departmentName: "Scrap Yard", notes: "Disposed assets area" },
-]
-
-const MOCK_USERS = [
-  { payrollNumber: "P001", firstName: "John", lastName: "Doe", role: "Admin" },
-  { payrollNumber: "P002", firstName: "Jane", lastName: "Smith", role: "Keeper" },
-  { payrollNumber: "P003", firstName: "Peter", lastName: "Jones", role: "Keeper" },
-  { payrollNumber: "P004", firstName: "Alice", lastName: "Brown", role: "Viewer" },
-  { payrollNumber: "P005", firstName: "David", lastName: "Green", role: "Keeper" },
-  { payrollNumber: "P006", firstName: "Sarah", lastName: "White", role: "Viewer" },
-  { payrollNumber: "P007", firstName: "Michael", lastName: "Black", role: "Admin" },
-  { payrollNumber: "P008", firstName: "Emily", lastName: "Davis", role: "Keeper" },
-  { payrollNumber: "P009", firstName: "Chris", lastName: "Wilson", role: "Viewer" },
-  { payrollNumber: "P010", firstName: "Olivia", lastName: "Taylor", role: "Keeper" },
-]
-
-const AVAILABILITY_OPTIONS = ["Available", "Assigned", "In Repair", "Disposed"]
-
-const formSchema = z
+// Define the schema for the asset form
+const assetFormSchema = z
   .object({
     name: z.string().min(2, {
       message: "Asset name must be at least 2 characters.",
     }),
-    serialNumber: z.string().min(3, {
-      message: "Serial number must be at least 3 characters.",
-    }),
-    region: z.string().min(1, {
-      message: "Please select a region.",
-    }),
-    location: z.string().min(1, {
-      message: "Please select a location.",
-    }),
-    keeper: z.string().min(1, {
-      message: "Please select a keeper.",
-    }),
+    serialNumber: z.string().optional(), // Optional for bulk items
+    region: z.string().min(1, { message: "Region is required." }),
+    location: z.string().min(1, { message: "Location is required." }),
+    keeper: z.string().min(1, { message: "Keeper is required." }),
     availability: z.enum(["Available", "Assigned", "In Repair", "Disposed"], {
-      message: "Please select an availability status.",
+      message: "Please select a valid availability status.",
     }),
     isBulk: z.boolean().default(false),
     quantity: z.preprocess(
-      (val) => (val === "" ? undefined : Number(val)),
+      (val) => Number(val),
       z.number().int().min(1, { message: "Quantity must be at least 1." }).optional(),
     ),
   })
@@ -73,17 +36,25 @@ const formSchema = z
         path: ["quantity"],
       })
     }
+    if (!data.isBulk && data.serialNumber === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Serial number is required for unique assets.",
+        path: ["serialNumber"],
+      })
+    }
   })
 
+type AssetFormValues = z.infer<typeof assetFormSchema>
+
 interface CreateAssetFormProps {
-  onAddAsset: (newAsset: Omit<z.infer<typeof formSchema>, "id">) => void
+  onAddAsset: (newAsset: AssetFormValues & { id: string }) => void
+  onClose: () => void
 }
 
-export function CreateAssetForm({ onAddAsset }: CreateAssetFormProps) {
-  const { toast } = useToast()
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+export function CreateAssetForm({ onAddAsset, onClose }: CreateAssetFormProps) {
+  const form = useForm<AssetFormValues>({
+    resolver: zodResolver(assetFormSchema),
     defaultValues: {
       name: "",
       serialNumber: "",
@@ -98,15 +69,15 @@ export function CreateAssetForm({ onAddAsset }: CreateAssetFormProps) {
 
   const isBulk = form.watch("isBulk")
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // Simulate API call or data processing
-    console.log("New Asset Data:", values)
-    onAddAsset(values)
+  const onSubmit = (values: AssetFormValues) => {
+    // Generate a dummy ID for the new asset
+    const newId = `ASSET-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
+    onAddAsset({ ...values, id: newId })
     toast({
       title: "Asset Created!",
-      description: `Asset "${values.name}" with serial "${values.serialNumber}" has been added.`,
+      description: `Asset "${values.name}" has been added to the inventory.`,
     })
-    form.reset() // Reset form after successful submission
+    onClose()
   }
 
   return (
@@ -119,7 +90,7 @@ export function CreateAssetForm({ onAddAsset }: CreateAssetFormProps) {
             <FormItem>
               <FormLabel>Asset Name</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Laptop, Projector" {...field} />
+                <Input placeholder="e.g., HP Laptop" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -127,17 +98,51 @@ export function CreateAssetForm({ onAddAsset }: CreateAssetFormProps) {
         />
         <FormField
           control={form.control}
-          name="serialNumber"
+          name="isBulk"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Serial Number</FormLabel>
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
               <FormControl>
-                <Input placeholder="e.g., SN123456789" {...field} />
+                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
               </FormControl>
-              <FormMessage />
+              <div className="space-y-1 leading-none">
+                <FormLabel>Bulk Item</FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  Check if this asset is a bulk consumable (e.g., toner, cables).
+                </p>
+              </div>
             </FormItem>
           )}
         />
+        {!isBulk && (
+          <FormField
+            control={form.control}
+            name="serialNumber"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Serial Number</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g., SN123456789" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+        {isBulk && (
+          <FormField
+            control={form.control}
+            name="quantity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Quantity</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="e.g., 100" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         <FormField
           control={form.control}
           name="region"
@@ -151,11 +156,9 @@ export function CreateAssetForm({ onAddAsset }: CreateAssetFormProps) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {Array.from(new Set(MOCK_LOCATIONS.map((loc) => loc.regionName))).map((region) => (
-                    <SelectItem key={region} value={region}>
-                      {region}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="Nairobi">Nairobi</SelectItem>
+                  <SelectItem value="Mombasa">Mombasa</SelectItem>
+                  <SelectItem value="Kisumu">Kisumu</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -175,11 +178,13 @@ export function CreateAssetForm({ onAddAsset }: CreateAssetFormProps) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {MOCK_LOCATIONS.map((location) => (
-                    <SelectItem key={location.id} value={location.departmentName}>
-                      {location.departmentName}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="IT Store Room A">IT Store Room A</SelectItem>
+                  <SelectItem value="IT Store Room B">IT Store Room B</SelectItem>
+                  <SelectItem value="Server Room 1">Server Room 1</SelectItem>
+                  <SelectItem value="Office 101">Office 101</SelectItem>
+                  <SelectItem value="Conference Room 3">Conference Room 3</SelectItem>
+                  <SelectItem value="Repair Workshop">Repair Workshop</SelectItem>
+                  <SelectItem value="Training Room">Training Room</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -195,15 +200,20 @@ export function CreateAssetForm({ onAddAsset }: CreateAssetFormProps) {
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select an asset keeper" />
+                    <SelectValue placeholder="Select a keeper" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {MOCK_USERS.map((user) => (
-                    <SelectItem key={user.payrollNumber} value={`${user.firstName} ${user.lastName}`}>
-                      {user.firstName} {user.lastName}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="John Doe">John Doe</SelectItem>
+                  <SelectItem value="Jane Smith">Jane Smith</SelectItem>
+                  <SelectItem value="Peter Jones">Peter Jones</SelectItem>
+                  <SelectItem value="Alice Brown">Alice Brown</SelectItem>
+                  <SelectItem value="David Green">David Green</SelectItem>
+                  <SelectItem value="Sarah White">Sarah White</SelectItem>
+                  <SelectItem value="Michael Black">Michael Black</SelectItem>
+                  <SelectItem value="Emily Davis">Emily Davis</SelectItem>
+                  <SelectItem value="Chris Wilson">Chris Wilson</SelectItem>
+                  <SelectItem value="Olivia Taylor">Olivia Taylor</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -215,57 +225,24 @@ export function CreateAssetForm({ onAddAsset }: CreateAssetFormProps) {
           name="availability"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Availability Status</FormLabel>
+              <FormLabel>Availability</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
+                    <SelectValue placeholder="Select availability" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {AVAILABILITY_OPTIONS.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {status}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="Available">Available</SelectItem>
+                  <SelectItem value="Assigned">Assigned</SelectItem>
+                  <SelectItem value="In Repair">In Repair</SelectItem>
+                  <SelectItem value="Disposed">Disposed</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
             </FormItem>
           )}
         />
-        <FormField
-          control={form.control}
-          name="isBulk"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-              <FormControl>
-                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel>Is this a bulk item?</FormLabel>
-                <FormDescription>
-                  Check if this asset represents multiple identical items (e.g., toner cartridges).
-                </FormDescription>
-              </div>
-            </FormItem>
-          )}
-        />
-        {isBulk && (
-          <FormField
-            control={form.control}
-            name="quantity"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Quantity</FormLabel>
-                <FormControl>
-                  <Input type="number" placeholder="Enter quantity" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
         <Button type="submit" className="w-full bg-kr-maroon hover:bg-kr-maroon-dark">
           Create Asset
         </Button>
