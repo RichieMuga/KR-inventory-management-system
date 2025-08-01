@@ -1,19 +1,25 @@
-import { Header } from "@/components/layout/header"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { AssignmentCard } from "@/components/assignment-card" // Import the new card component
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { AssignmentCard } from "@/components/assignment-card"; // Import the new card component
 
 interface Assignment {
-  id: string
-  assetName: string
-  assignedTo: string
-  assignedBy: string
-  dateIssued: string
-  dateDue?: string
-  dateReturned?: string
-  conditionIssued: string
-  conditionReturned?: string
-  notes?: string
+  id: string;
+  assetName: string;
+  assignedTo: string;
+  assignedBy: string;
+  dateIssued: string;
+  dateDue?: string;
+  dateReturned?: string;
+  conditionIssued: string;
+  conditionReturned?: string;
+  notes?: string;
 }
 
 const MOCK_ASSIGNMENTS: Assignment[] = [
@@ -65,21 +71,26 @@ const MOCK_ASSIGNMENTS: Assignment[] = [
     conditionIssued: "Good",
     notes: "Issued with new laptop",
   },
-]
+];
 
 export default function AssignmentsPage() {
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <Header />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
-        <h1 className="text-3xl font-bold text-kr-maroon-dark">Asset Assignments</h1>
+        <h1 className="text-3xl font-bold text-kr-maroon-dark">
+          Asset Assignments
+        </h1>
 
         {/* Mobile View: Cards */}
         <div className="grid gap-4 md:hidden">
           {MOCK_ASSIGNMENTS.length > 0 ? (
-            MOCK_ASSIGNMENTS.map((assignment) => <AssignmentCard key={assignment.id} assignment={assignment} />)
+            MOCK_ASSIGNMENTS.map((assignment) => (
+              <AssignmentCard key={assignment.id} assignment={assignment} />
+            ))
           ) : (
-            <p className="text-center text-muted-foreground">No assignments found.</p>
+            <p className="text-center text-muted-foreground">
+              No assignments found.
+            </p>
           )}
         </div>
 
@@ -101,18 +112,26 @@ export default function AssignmentsPage() {
             <TableBody>
               {MOCK_ASSIGNMENTS.map((assignment) => (
                 <TableRow key={assignment.id}>
-                  <TableCell className="font-medium">{assignment.assetName}</TableCell>
+                  <TableCell className="font-medium">
+                    {assignment.assetName}
+                  </TableCell>
                   <TableCell>{assignment.assignedTo}</TableCell>
                   <TableCell>{assignment.assignedBy}</TableCell>
                   <TableCell>{assignment.dateIssued}</TableCell>
                   <TableCell>{assignment.dateDue || "N/A"}</TableCell>
                   <TableCell>
                     {assignment.dateReturned ? (
-                      <Badge variant="secondary" className="bg-green-100 text-green-800">
+                      <Badge
+                        variant="secondary"
+                        className="bg-green-100 text-green-800"
+                      >
                         {assignment.dateReturned}
                       </Badge>
                     ) : (
-                      <Badge variant="secondary" className="bg-kr-orange-dark text-white">
+                      <Badge
+                        variant="secondary"
+                        className="bg-kr-orange-dark text-white"
+                      >
                         Outstanding
                       </Badge>
                     )}
@@ -126,5 +145,5 @@ export default function AssignmentsPage() {
         </div>
       </main>
     </div>
-  )
+  );
 }

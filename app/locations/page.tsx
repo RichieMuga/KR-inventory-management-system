@@ -1,4 +1,3 @@
-import { Header } from "@/components/layout/header"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { LocationCard } from "@/components/location-card" // Import the new card component
 
@@ -25,7 +24,6 @@ const MOCK_LOCATIONS: Location[] = [
 export default function LocationsPage() {
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <Header />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
         <h1 className="text-3xl font-bold text-kr-maroon-dark">Inventory Locations</h1>
 
