@@ -1,4 +1,4 @@
-import { AssetListView } from "@/components/bulk-assets/asset-bulk-list-view"
+import { AssetListView } from "@/components/unique-assets/asset-unique-list-view"
 
 export default function HomePage() {
   return (
