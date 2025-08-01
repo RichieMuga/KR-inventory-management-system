@@ -10,7 +10,16 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tag, MapPin, User, Package, Eye, Edit, Trash2 } from "lucide-react";
+import {
+  Tag,
+  MapPin,
+  User,
+  Package,
+  Eye,
+  Edit,
+  Trash2,
+  AlertTriangle,
+} from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -30,17 +39,20 @@ interface AssetCardProps {
     isBulk: boolean;
     quantity?: number;
   };
+  lowQuantityThreshold?: number; // Optional prop to define what's considered "low"
 }
 
-export function AssetCard({ asset }: AssetCardProps) {
+export function AssetCard({
+  asset,
+  lowQuantityThreshold = 10,
+}: AssetCardProps) {
   const router = useRouter();
 
-  const availabilityColor = {
-    Available: "bg-green-100 text-green-800",
-    Assigned: "bg-kr-orange-dark text-white",
-    "In Repair": "bg-yellow-100 text-yellow-800",
-    Disposed: "bg-red-100 text-red-800",
-  };
+  // Determine if quantity is low
+  const isLowQuantity =
+    asset.isBulk &&
+    asset.quantity !== undefined &&
+    asset.quantity <= lowQuantityThreshold;
 
   const handleViewAsset = () => {
     router.push(`/viewAsset/${asset.id}`);
@@ -62,11 +74,14 @@ export function AssetCard({ asset }: AssetCardProps) {
         <CardTitle className="text-lg font-semibold text-kr-maroon-dark">
           {asset.name}
         </CardTitle>
-        <Badge
-          className={`${availabilityColor[asset.availability]} px-2 py-1 rounded-full text-xs`}
-        >
-          {asset.availability}
-        </Badge>
+        <div className="flex gap-2">
+          {asset.isBulk && isLowQuantity && (
+            <Badge className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              Low Stock
+            </Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
         <div className="flex items-center gap-2">
@@ -81,13 +96,27 @@ export function AssetCard({ asset }: AssetCardProps) {
         </div>
         <div className="flex items-center gap-2">
           <User className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Keeper:</span> {asset.keeper}
+          <span className="text-muted-foreground">
+            Keeper/Responsibility:
+          </span>{" "}
+          {asset.keeper}
         </div>
         {asset.isBulk && (
           <div className="flex items-center gap-2">
             <Package className="h-4 w-4 text-muted-foreground" />
             <span className="text-muted-foreground">Quantity:</span>{" "}
-            {asset.quantity}
+            <span
+              className={
+                isLowQuantity ? "text-red-600 font-semibold" : "text-gray-900"
+              }
+            >
+              {asset.quantity}
+            </span>
+            {isLowQuantity && (
+              <span className="text-red-600 text-xs font-medium">
+                (Low Stock)
+              </span>
+            )}
           </div>
         )}
       </CardContent>

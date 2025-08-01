@@ -6,14 +6,13 @@ import { useDispatch, useSelector } from "react-redux";
 import { useState, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { AssetCard } from "./asset-card";
-import { AssetTable } from "./asset-table";
+import { AssetCard } from "./asset-unique-card";
+import { AssetTable } from "./asset-unique-table";
 import { Search, PlusCircle } from "lucide-react";
-import { toggleBulkModal, toggleUniqueModal } from "@/lib/features/modals/asset-modal-buttons";
+import { toggleUniqueModal } from "@/lib/features/modals/asset-modal-buttons";
 import { RootState } from "@/lib/store";
-import BulkAssetModal from "./modals/bulk-asset-modal";
-import UniqueAssetModal from "./modals/unique-asset-modal";
-import  Pagination  from "@/components/pagination/pagination";
+import UniqueAssetModal from "@/components/modals/unique-asset-modal";
+import Pagination from "@/components/pagination/pagination";
 
 interface Asset {
   id: string;
@@ -30,14 +29,13 @@ interface Asset {
 const MOCK_ASSETS: Asset[] = [
   {
     id: "1",
-    name: "HP Toner Cartridge (Black)",
-    serialNumber: "HP-TNR-BLK-001",
+    name: "Epsion Projector",
+    serialNumber: "PROJECT-1",
     region: "Nairobi",
     availability: "Available",
     location: "IT Store Room A",
     keeper: "John Doe",
-    isBulk: true,
-    quantity: 25,
+    isBulk: false,
   },
   {
     id: "2",
@@ -51,25 +49,23 @@ const MOCK_ASSETS: Asset[] = [
   },
   {
     id: "3",
-    name: "Epson Ink Cartridge (Cyan)",
+    name: "Confrence microphone",
     serialNumber: "EPS-INK-CYN-003",
     region: "Kisumu",
     availability: "Available",
     location: "IT Store Room B",
     keeper: "Peter Jones",
-    isBulk: true,
-    quantity: 15,
+    isBulk: false,
   },
   {
     id: "4",
-    name: "Network Cable (CAT6, 10m)",
-    serialNumber: "NET-CAB-CAT6-004",
+    name: "ELT",
+    serialNumber: "elt-22",
     region: "Nairobi",
     availability: "Available",
     location: "Server Room 1",
     keeper: "Alice Brown",
-    isBulk: true,
-    quantity: 50,
+    isBulk: false,
   },
   {
     id: "5",
@@ -89,8 +85,7 @@ const MOCK_ASSETS: Asset[] = [
     availability: "Available",
     location: "IT Store Room A",
     keeper: "Sarah White",
-    isBulk: true,
-    quantity: 10,
+    isBulk: false,
   },
   {
     id: "7",
@@ -100,7 +95,7 @@ const MOCK_ASSETS: Asset[] = [
     availability: "Available",
     location: "IT Store Room B",
     keeper: "Michael Black",
-    isBulk: true,
+    isBulk: false,
     quantity: 20,
   },
   {
@@ -145,7 +140,7 @@ export function AssetListView() {
 
   const dispatch = useDispatch();
 
-  const { isBulkAssetModalOpen, isUniqueAssetModalOpen } = useSelector(
+  const { isUniqueAssetModalOpen } = useSelector(
     (state: RootState) => state.assetModal,
   );
 
@@ -204,10 +199,6 @@ export function AssetListView() {
     }, 100);
   };
 
-  const handleToggleBulkAssetModal = () => {
-    dispatch(toggleBulkModal());
-  };
-
   const handleToggleUniqueAssetModal = () => {
     dispatch(toggleUniqueModal());
   };
@@ -215,7 +206,7 @@ export function AssetListView() {
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-kr-maroon-dark">
-          ICT Asset Inventory
+          Unique Asset Inventory
         </h1>
         <div className="relative flex w-full max-w-sm md:max-w-xs">
           <Input
@@ -266,13 +257,6 @@ export function AssetListView() {
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Unique Asset
         </Button>
-        <Button
-          onClick={handleToggleBulkAssetModal}
-          className="bg-kr-maroon hover:bg-kr-maroon-dark"
-        >
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Bulk Asset
-        </Button>
       </div>
 
       {/* Mobile View: Cards */}
@@ -298,9 +282,8 @@ export function AssetListView() {
           </p>
         )}
       </div>
-      {isBulkAssetModalOpen && <BulkAssetModal />}
       {isUniqueAssetModalOpen && <UniqueAssetModal />}
-      <Pagination/>
+      <Pagination />
     </div>
   );
 }
