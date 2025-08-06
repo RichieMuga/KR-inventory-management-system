@@ -1,3 +1,7 @@
+"use client";
+
+import { useDispatch, useSelector } from "react-redux";
+
 import {
   Table,
   TableBody,
@@ -8,6 +12,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { UserCard } from "@/components/user-card"; // Import the new card component
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { PlusCircle, Search } from "lucide-react";
+import { toggleUserModal } from "@/lib/features/modals/user-creation-modal";
+import { RootState } from "@/lib/store";
+import CreateUserModal from "@/components/modals/user-creation-modal";
+import Pagination from "@/components/pagination/pagination";
 
 interface User {
   payrollNumber: string;
@@ -88,10 +99,45 @@ export default function UsersPage() {
     }
   };
 
+  const dispatch = useDispatch();
+
+  const { isUserModalOpen } = useSelector(
+    (state: RootState) => state.userModal,
+  );
+
+  const handleUserModalToggle = () => {
+    dispatch(toggleUserModal());
+  };
+
   return (
     <div className="flex min-h-screen w-full flex-col">
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
-        <h1 className="text-3xl font-bold text-kr-maroon-dark">System Users</h1>
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <h1 className="text-2xl font-bold text-kr-maroon-dark">Users</h1>
+          <div className="relative flex w-full max-w-sm md:max-w-xs">
+            <Input
+              type="search"
+              placeholder="Search user by payroll number or name..."
+              className="flex-1 pr-10" // Add padding for the button
+            />
+            <Button
+              type="button"
+              size="icon"
+              className="absolute right-0 top-0 h-full rounded-l-none bg-kr-orange hover:bg-kr-orange-dark"
+              onClick={() => console.log("Search asset")}
+              aria-label="Search"
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button
+            onClick={handleUserModalToggle}
+            className="bg-kr-maroon hover:bg-kr-maroon-dark"
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add User
+          </Button>
+        </div>
 
         {/* Mobile View: Cards */}
         <div className="grid gap-4 md:hidden">
@@ -136,6 +182,8 @@ export default function UsersPage() {
           </Table>
         </div>
       </main>
+      {isUserModalOpen && <CreateUserModal />}
+      <Pagination />
     </div>
   );
 }

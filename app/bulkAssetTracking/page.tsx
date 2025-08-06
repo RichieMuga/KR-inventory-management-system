@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, Edit, Trash2, Package, MoreVertical } from "lucide-react";
+import { Eye, Edit, Trash2, Package, MoreVertical, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import Pagination from "@/components/pagination/pagination";
 
 // Add these type definitions at the top of the file, after the imports
 interface BulkAsset {
@@ -248,10 +249,25 @@ export default function BulkAssetsTracking() {
 
   return (
     <div className="p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-kr-maroon-dark py-4">
+      <div className="flex flex-col gap-5 py-3 sm:flex-row">
+        <h1 className="text-2xl font-bold text-kr-maroon-dark">
           Bulk Asset Tracking
         </h1>
+        <div className="relative flex w-full max-w-sm md:max-w-xs">
+          <Input
+            type="search"
+            placeholder="Search assets by name or serial..."
+          />
+          <Button
+            type="button"
+            size="icon"
+            className="rounded-l-none bg-kr-orange hover:bg-kr-orange-dark"
+            onClick={()=>console.log("search")}
+            aria-label="Search"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       {/* Desktop Table View */}
       <div className="hidden md:block overflow-x-auto">
@@ -647,6 +663,7 @@ export default function BulkAssetsTracking() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Pagination />
     </div>
   );
 }

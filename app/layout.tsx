@@ -6,9 +6,10 @@ import StoreProvider from "@/lib/StoreProvider";
 import { Header } from "@/components/layout/header";
 
 export const metadata: Metadata = {
-  title: "v0 App",
-  description: "Created with v0",
-  generator: "v0.dev",
+  title: "KR Store keeping and Asset tracking",
+  icons: {
+    icon: "/favicon.ico"
+  },
 };
 
 export default function RootLayout({
