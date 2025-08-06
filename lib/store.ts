@@ -1,12 +1,16 @@
 import { configureStore } from "@reduxjs/toolkit";
 
 import assetModalSlice from "@/lib/features/modals/asset-modal-buttons";
+import userModalSlice from "@/lib/features/modals/user-creation-modal";
+import locationModalSlice from "@/lib/features/modals/location-modal";
 
 export const makeStore = () => {
   return configureStore({
     reducer: {
       // modals
       assetModal: assetModalSlice,
+      userModal: userModalSlice,
+      locationModal: locationModalSlice,
     },
   });
 };
