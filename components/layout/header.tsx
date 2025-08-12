@@ -3,13 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import {
-  Menu,
-  User,
-  Lock,
-  LogOut,
-  ChevronDown,
-} from "lucide-react";
+import { usePathname } from "next/navigation"; // ✅ new import
+import { Menu, User, Lock, LogOut, ChevronDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -38,6 +33,7 @@ const user: UserInfo = {
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname(); // ✅ get current route
 
   const navLinks = [
     { href: "/dashboard", label: "Dashboard" },
@@ -100,8 +96,9 @@ export function Header() {
                   key={link.href}
                   href={link.href}
                   className={cn(
-                    "hover:text-kr-orange",
-                    "text-muted-foreground",
+                    pathname === link.href
+                      ? "text-kr-orange font-semibold" 
+                      : "text-muted-foreground hover:text-kr-orange",
                   )}
                   onClick={() => setIsOpen(false)}
                 >
@@ -134,14 +131,15 @@ export function Header() {
       </div>
 
       {/* Desktop nav (right side) */}
-      <nav className="hidden md:flex md:items-center md:gap-5 lg:gap-6 text-sm font-medium ml-auto">
+      <nav className="hidden md:flex md:items-center md:gap-2 lg:gap-5 text-sm font-medium ml-auto">
         {navLinks.map((link) => (
           <Link
             key={link.href}
             href={link.href}
             className={cn(
-              "transition-colors hover:text-kr-orange",
-              "text-muted-foreground",
+              pathname === link.href
+                ? "text-kr-orange font-semibold border-kr-orange"
+                : "text-muted-foreground hover:text-kr-orange",
             )}
           >
             {link.label}
