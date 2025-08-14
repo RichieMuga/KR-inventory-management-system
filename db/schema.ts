@@ -1,3 +1,4 @@
+// db/schema.ts
 import {
   pgTable,
   serial,
@@ -6,31 +7,29 @@ import {
   integer,
   timestamp,
   text,
-  decimal,
   pgEnum,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
 
-// Enums for better type safety
+// === ENUMS ===
 export const userRoleEnum = pgEnum("user_role", ["admin", "keeper", "viewer"]);
 
 export const individualStatusEnum = pgEnum("individual_status", [
-  "available",
   "in_use",
-  "maintenance",
-  "disposed",
+  "not_in_use",
+  "retired",
 ]);
 
 export const bulkStatusEnum = pgEnum("bulk_status", [
-  "not_issued",
-  "issued",
-  "depleted",
+  "active",
+  "out_of_stock",
+  "discontinued",
 ]);
 
 export const movementTypeEnum = pgEnum("movement_type", [
   "transfer",
   "assignment",
-  "return",
   "adjustment",
   "disposal",
 ]);
@@ -43,19 +42,25 @@ export const conditionEnum = pgEnum("condition", [
   "damaged",
 ]);
 
-// Users table
+// === TABLES ===
+
+/**
+ * Users who interact with the system
+ */
 export const users = pgTable("users", {
   payrollNumber: varchar("payroll_number", { length: 50 }).primaryKey(),
   firstName: varchar("first_name", { length: 100 }).notNull(),
   lastName: varchar("last_name", { length: 100 }).notNull(),
   role: userRoleEnum("role").notNull().default("viewer"),
   password: varchar("password", { length: 255 }).notNull(),
-  mustChangePassword: boolean("must_change_password").notNull().default(false),
+  mustChangePassword: boolean("must_change_password").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Locations table
+/**
+ * Physical or logical locations (e.g., departments, regions)
+ */
 export const locations = pgTable("locations", {
   locationId: serial("location_id").primaryKey(),
   regionName: varchar("region_name", { length: 100 }).notNull(),
@@ -65,99 +70,148 @@ export const locations = pgTable("locations", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Assets table with improved status handling
-export const assets = pgTable("assets", {
-  assetId: serial("asset_id").primaryKey(),
-  name: varchar("name", { length: 200 }).notNull(),
-  region: varchar("region", { length: 100 }).notNull(),
-  keeperPayrollNumber: varchar("keeper_payroll_number", {
-    length: 50,
-  }).references(() => users.payrollNumber),
-  locationId: integer("location_id")
-    .references(() => locations.locationId)
-    .notNull(),
-  serialNumber: varchar("serial_number", { length: 100 }), // Nullable for bulk items
-  isBulk: boolean("is_bulk").notNull().default(false),
+/**
+ * Assets — both unique (individual) and bulk (stocked)
+ *
+ * Key design: `isBulk` determines which fields are used.
+ *
+ * Constraints:
+ * - Unique assets: require `serialNumber`, `individualStatus`
+ * - Bulk assets: use `currentStockLevel`, `bulkStatus`, `minimumThreshold`
+ */
 
-  // Status fields - only one should be populated based on isBulk
-  individualStatus: individualStatusEnum("individual_status"), // For individual assets
-  bulkStatus: bulkStatusEnum("bulk_status"), // For bulk assets
-  currentStockLevel: integer("current_stock_level"), // For bulk assets only
+// Updated constraint in your schema.ts
+export const assets = pgTable(
+  "assets",
+  {
+    assetId: serial("asset_id").primaryKey(),
+    name: varchar("name", { length: 200 }).notNull(),
+    keeperPayrollNumber: varchar("keeper_payroll_number", {
+      length: 50,
+    }).references(() => users.payrollNumber, { onDelete: "set null" }),
+    locationId: integer("location_id")
+      .notNull()
+      .references(() => locations.locationId, { onDelete: "cascade" }),
+    serialNumber: varchar("serial_number", { length: 100 }),
+    isBulk: boolean("is_bulk").notNull().default(false),
 
-  // Additional useful fields
-  modelNumber: varchar("model_number", { length: 100 }),
-  purchaseDate: timestamp("purchase_date"),
-  purchaseCost: decimal("purchase_cost", { precision: 10, scale: 2 }),
+    // === Unique Asset Fields ===
+    individualStatus: individualStatusEnum("individual_status"),
 
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+    // === Bulk Asset Fields ===
+    bulkStatus: bulkStatusEnum("bulk_status"),
+    currentStockLevel: integer("current_stock_level"),
+    minimumThreshold: integer("minimum_threshold").default(0),
+    lastRestocked: timestamp("last_restocked"),
 
-// Asset Stock table (for bulk inventory tracking)
-export const assetStock = pgTable("asset_stock", {
-  assetId: integer("asset_id")
-    .references(() => assets.assetId)
-    .primaryKey(),
-  quantity: integer("quantity").notNull().default(0),
-  assetName: varchar("asset_name", { length: 200 }).notNull(),
-  keeperPayrollNumber: varchar("keeper_payroll_number", {
-    length: 50,
-  }).references(() => users.payrollNumber),
-  minimumThreshold: integer("minimum_threshold").default(0),
-  maximumCapacity: integer("maximum_capacity"),
-  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
-});
+    // === Shared Optional Fields ===
+    modelNumber: varchar("model_number", { length: 100 }),
+    notes: text("notes"), // Add this field if it's missing
 
-// Asset Movement table
+    // === Timestamps ===
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    // 🔐 Constraint: serialNumber is required for non-bulk (unique) assets
+    serialNumberRequiredForUnique: sql`
+      CHECK (
+        (is_bulk = true) OR 
+        (is_bulk = false AND serial_number IS NOT NULL)
+      )
+    `,
+
+    // 🔐 Constraint: individualStatus only for non-bulk
+    individualStatusOnlyForUnique: sql`
+      CHECK (
+        (is_bulk = true AND individual_status IS NULL) OR
+        (is_bulk = false)
+      )
+    `,
+
+    // 🔐 FIXED Constraint: bulk fields only for bulk assets
+    bulkFieldsOnlyForBulk: sql`
+      CHECK (
+        (is_bulk = false AND 
+         bulk_status IS NULL AND 
+         current_stock_level IS NULL AND 
+         (minimum_threshold IS NULL OR minimum_threshold = 0) AND 
+         last_restocked IS NULL
+        ) OR
+        (is_bulk = true)
+      )
+    `,
+  }),
+);
+
+/**
+ * Tracks all movements of assets (transfers, assignments, disposal)
+ */
 export const assetMovement = pgTable("asset_movement", {
   movementId: serial("movement_id").primaryKey(),
   assetId: integer("asset_id")
-    .references(() => assets.assetId)
-    .notNull(),
+    .notNull()
+    .references(() => assets.assetId, { onDelete: "cascade" }),
   fromLocationId: integer("from_location_id").references(
     () => locations.locationId,
+    { onDelete: "set null" },
   ),
-  toLocationId: integer("to_location_id").references(
-    () => locations.locationId,
-  ),
+  toLocationId: integer("to_location_id")
+    .notNull()
+    .references(() => locations.locationId, { onDelete: "cascade" }),
   movedBy: varchar("moved_by", { length: 50 })
-    .references(() => users.payrollNumber)
-    .notNull(),
+    .notNull()
+    .references(() => users.payrollNumber, { onDelete: "set null" }),
   movementType: movementTypeEnum("movement_type").notNull().default("transfer"),
-  quantity: integer("quantity").default(1), // For bulk items
+  quantity: integer("quantity").notNull().default(1),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   notes: text("notes"),
 });
 
-// Asset Assignment table
+/**
+ * Tracks assignment of assets to users (especially useful for unique assets)
+ */
 export const assetAssignment = pgTable("asset_assignment", {
   assignmentId: serial("assignment_id").primaryKey(),
   assetId: integer("asset_id")
-    .references(() => assets.assetId)
-    .notNull(),
+    .notNull()
+    .references(() => assets.assetId, { onDelete: "cascade" }),
   assignedTo: varchar("assigned_to", { length: 50 })
-    .references(() => users.payrollNumber)
-    .notNull(),
+    .notNull()
+    .references(() => users.payrollNumber, { onDelete: "cascade" }),
   assignedBy: varchar("assigned_by", { length: 50 })
-    .references(() => users.payrollNumber)
-    .notNull(),
+    .notNull()
+    .references(() => users.payrollNumber, { onDelete: "set null" }),
   dateIssued: timestamp("date_issued").defaultNow().notNull(),
-  dateDue: timestamp("date_due"),
-  dateReturned: timestamp("date_returned"),
   conditionIssued: conditionEnum("condition_issued").notNull().default("good"),
-  conditionReturned: conditionEnum("condition_returned"),
   notes: text("notes"),
-  quantity: integer("quantity").default(1), // For bulk assignments
-  isActive: boolean("is_active").notNull().default(true),
+  quantity: integer("quantity").notNull().default(1),
 });
 
-// Relations
+/**
+ * Logs restocking events for bulk assets
+ */
+export const restockLog = pgTable("restock_log", {
+  logId: serial("log_id").primaryKey(),
+  assetId: integer("asset_id")
+    .notNull()
+    .references(() => assets.assetId, { onDelete: "cascade" }),
+  quantityRestocked: integer("quantity_restocked").notNull(),
+  restockedBy: varchar("restocked_by", { length: 50 })
+    .notNull()
+    .references(() => users.payrollNumber, { onDelete: "set null" }),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  notes: text("notes"),
+});
+
+// === RELATIONS ===
+
 export const usersRelations = relations(users, ({ many }) => ({
-  assignedAssets: many(assets),
-  stockAssets: many(assetStock),
-  movements: many(assetMovement),
+  assets: many(assets, { relationName: "keeper" }),
+  movements: many(assetMovement, { relationName: "movedByUser" }),
   assignmentsGiven: many(assetAssignment, { relationName: "assignedBy" }),
   assignmentsReceived: many(assetAssignment, { relationName: "assignedTo" }),
+  restockLogs: many(restockLog),
 }));
 
 export const locationsRelations = relations(locations, ({ many }) => ({
@@ -170,28 +224,15 @@ export const assetsRelations = relations(assets, ({ one, many }) => ({
   keeper: one(users, {
     fields: [assets.keeperPayrollNumber],
     references: [users.payrollNumber],
+    relationName: "keeper",
   }),
   location: one(locations, {
     fields: [assets.locationId],
     references: [locations.locationId],
   }),
-  stock: one(assetStock, {
-    fields: [assets.assetId],
-    references: [assetStock.assetId],
-  }),
   movements: many(assetMovement),
   assignments: many(assetAssignment),
-}));
-
-export const assetStockRelations = relations(assetStock, ({ one }) => ({
-  asset: one(assets, {
-    fields: [assetStock.assetId],
-    references: [assets.assetId],
-  }),
-  keeper: one(users, {
-    fields: [assetStock.keeperPayrollNumber],
-    references: [users.payrollNumber],
-  }),
+  restockLogs: many(restockLog),
 }));
 
 export const assetMovementRelations = relations(assetMovement, ({ one }) => ({
@@ -235,7 +276,18 @@ export const assetAssignmentRelations = relations(
   }),
 );
 
-// Type exports for use in your application
+export const restockLogRelations = relations(restockLog, ({ one }) => ({
+  asset: one(assets, {
+    fields: [restockLog.assetId],
+    references: [assets.assetId],
+  }),
+  restocker: one(users, {
+    fields: [restockLog.restockedBy],
+    references: [users.payrollNumber],
+  }),
+}));
+
+// === TYPE EXPORTS ===
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 
@@ -245,11 +297,11 @@ export type NewLocation = typeof locations.$inferInsert;
 export type Asset = typeof assets.$inferSelect;
 export type NewAsset = typeof assets.$inferInsert;
 
-export type AssetStock = typeof assetStock.$inferSelect;
-export type NewAssetStock = typeof assetStock.$inferInsert;
-
 export type AssetMovement = typeof assetMovement.$inferSelect;
 export type NewAssetMovement = typeof assetMovement.$inferInsert;
 
 export type AssetAssignment = typeof assetAssignment.$inferSelect;
 export type NewAssetAssignment = typeof assetAssignment.$inferInsert;
+
+export type RestockLog = typeof restockLog.$inferSelect;
+export type NewRestockLog = typeof restockLog.$inferInsert;

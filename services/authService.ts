@@ -43,7 +43,7 @@ export class AuthService {
         lastName: user.lastName,
       },
       JWT_SECRET,
-      { expiresIn: "24h" },
+      { expiresIn: "30d" },
     );
   }
 

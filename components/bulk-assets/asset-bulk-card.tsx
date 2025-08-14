@@ -55,11 +55,11 @@ export function AssetCard({
     asset.quantity <= lowQuantityThreshold;
 
   const handleViewAsset = () => {
-    router.push(`/viewAsset/${asset.id}`);
+    router.push(`/view-bulk-asset/${asset.id}`);
   };
 
   const handleEditAsset = () => {
-    router.push(`/editAsset/${asset.id}`);
+    router.push(`/edit-bulk-asset/${asset.id}`);
   };
 
   const handleDeleteAsset = () => {
