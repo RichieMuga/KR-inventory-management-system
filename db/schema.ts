@@ -1,4 +1,3 @@
-// db/schema.ts
 import {
   pgTable,
   serial,
@@ -240,6 +239,11 @@ export const assetMovementRelations = relations(assetMovement, ({ one }) => ({
     fields: [assetMovement.assetId],
     references: [assets.assetId],
   }),
+  movedByUser: one(users, {
+    fields: [assetMovement.movedBy],
+    references: [users.payrollNumber],
+    relationName: "movedByUser",
+  }),
   fromLocation: one(locations, {
     fields: [assetMovement.fromLocationId],
     references: [locations.locationId],
@@ -249,10 +253,6 @@ export const assetMovementRelations = relations(assetMovement, ({ one }) => ({
     fields: [assetMovement.toLocationId],
     references: [locations.locationId],
     relationName: "toLocation",
-  }),
-  movedByUser: one(users, {
-    fields: [assetMovement.movedBy],
-    references: [users.payrollNumber],
   }),
 }));
 
