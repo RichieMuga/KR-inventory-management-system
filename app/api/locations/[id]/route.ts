@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import { LocationService } from "@/services/locationService";
-import { RoleRequest } from "@/types/request";
+import {
+  withKeeperAuth,
+  withAdminAuth,
+  AuthenticatedRequest,
+} from "@/middleware/authMiddleware";
+import * as schema from "@/db/schema";
 
-export async function GET(
-  request: Request,
+// GET /api/locations/[id] - Get single location (requires keeper or admin)
+async function getLocation(
+  req: AuthenticatedRequest,
   { params }: { params: { id: string } },
-) {
+): Promise<NextResponse> {
   try {
     const locationId = parseInt(params.id, 10);
-
     if (isNaN(locationId)) {
       return NextResponse.json(
         { success: false, error: "Invalid location ID" },
@@ -17,7 +22,6 @@ export async function GET(
     }
 
     const location = await LocationService.getById(locationId);
-
     if (!location) {
       return NextResponse.json(
         { success: false, error: "Location not found" },
@@ -38,13 +42,13 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  request: Request,
+// PATCH /api/locations/[id] - Update location (requires admin only)
+async function updateLocation(
+  req: AuthenticatedRequest,
   { params }: { params: { id: string } },
-) {
+): Promise<NextResponse> {
   try {
     const locationId = parseInt(params.id, 10);
-
     if (isNaN(locationId)) {
       return NextResponse.json(
         { success: false, error: "Invalid location ID" },
@@ -53,32 +57,27 @@ export async function PATCH(
     }
 
     // Parse request body
-    const body = (await request.json()) as RoleRequest & {
-      regionName?: string;
-      departmentName?: string;
-      notes?: string;
-    };
+    const body = await req.json();
 
-    // Check role
-    if (body.role !== "admin") {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 403 },
-      );
-    }
-
-    // Build update payload
-    const updateData: Record<string, unknown> = {};
+    // Build update payload - only include defined fields
+    const updateData: Partial<schema.NewLocation> = {};
     if (body.regionName !== undefined) updateData.regionName = body.regionName;
     if (body.departmentName !== undefined)
       updateData.departmentName = body.departmentName;
     if (body.notes !== undefined) updateData.notes = body.notes;
 
+    // Check if there's anything to update
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json(
+        { success: false, error: "No valid fields to update" },
+        { status: 400 },
+      );
+    }
+
     const updatedLocation = await LocationService.update(
       locationId,
       updateData,
     );
-
     if (!updatedLocation) {
       return NextResponse.json(
         { success: false, error: "Location not found" },
@@ -86,7 +85,11 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ success: true, data: updatedLocation });
+    return NextResponse.json({
+      success: true,
+      data: updatedLocation,
+      message: "Location updated successfully",
+    });
   } catch (error) {
     console.error("Error updating location:", error);
     return NextResponse.json(
@@ -96,13 +99,13 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  request: Request,
+// DELETE /api/locations/[id] - Delete location (requires admin only)
+async function deleteLocation(
+  req: AuthenticatedRequest,
   { params }: { params: { id: string } },
-) {
+): Promise<NextResponse> {
   try {
     const locationId = parseInt(params.id, 10);
-
     if (isNaN(locationId)) {
       return NextResponse.json(
         { success: false, error: "Invalid location ID" },
@@ -110,18 +113,7 @@ export async function DELETE(
       );
     }
 
-    // Parse request body to check role
-    const body = (await request.json()) as { role?: string };
-
-    if (body.role !== "admin") {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 403 },
-      );
-    }
-
     const deleted = await LocationService.delete(locationId);
-
     if (!deleted) {
       return NextResponse.json(
         { success: false, error: "Location not found" },
@@ -140,4 +132,27 @@ export async function DELETE(
       { status: 500 },
     );
   }
+}
+
+// Apply middleware and export
+// Note: Need to wrap the handlers to match the expected signature
+export async function GET(
+  request: Request,
+  context: { params: { id: string } },
+) {
+  return withKeeperAuth((req) => getLocation(req, context))(request as any);
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: { id: string } },
+) {
+  return withAdminAuth((req) => updateLocation(req, context))(request as any);
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: { id: string } },
+) {
+  return withAdminAuth((req) => deleteLocation(req, context))(request as any);
 }
