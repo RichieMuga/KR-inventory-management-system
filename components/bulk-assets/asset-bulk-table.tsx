@@ -70,11 +70,11 @@ export function AssetTable({
   };
 
   const handleViewAsset = (assetId: string) => {
-    router.push(`/viewAsset/${assetId}`);
+    router.push(`/view-bulk-asset/${assetId}`);
   };
 
   const handleEditAsset = (assetId: string) => {
-    router.push(`/editAsset/${assetId}`);
+    router.push(`/edit-bulk-asset/${assetId}`);
   };
 
   const handleDeleteAsset = (assetId: string) => {
