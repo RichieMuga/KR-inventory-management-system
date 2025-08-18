@@ -185,6 +185,9 @@ export const assetAssignment = pgTable("asset_assignment", {
   conditionIssued: conditionEnum("condition_issued").notNull().default("good"),
   notes: text("notes"),
   quantity: integer("quantity").notNull().default(1),
+  dateReturned: timestamp("date_returned"), // For tracking when asset was returned
+  conditionReturned: conditionEnum("condition_returned"), // Condition when returned
+  quantityReturned: integer("quantity_returned").default(0),
 });
 
 /**
