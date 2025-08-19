@@ -15,16 +15,23 @@ export const POST = withAdminAuth(async (req) => {
     const { payrollNumber: creatorPayroll, role: creatorRole } =
       extractRoleAndPayrollFromJWT(token) || {};
 
-    // Parse body for new user data
-    const { firstName, lastName, payrollNumber, role } = await req.json();
+    // Parse body for new user data - ADD defaultLocationId here
+    const {
+      firstName,
+      lastName,
+      payrollNumber,
+      role,
+      defaultLocationId, // Add this to the destructuring
+    } = await req.json();
 
-    // Create user (append default password here)
+    // Create user with location
     const user = await UserService.createUser({
       payrollNumber,
       firstName,
       lastName,
       role,
       password: "Password10",
+      defaultLocationId, // Pass it to the service
     });
 
     return NextResponse.json(
