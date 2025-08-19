@@ -7,18 +7,20 @@ import {
   locations,
   assetMovement,
 } from "@/db/schema";
-import { eq, and, like, or, desc, asc, sql } from "drizzle-orm";
+import { eq, and, like, or, desc, asc, sql, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 
-// Types
-export interface CreateAssignmentData {
+// Enhanced CreateAssignmentData interface
+interface CreateAssignmentData {
   assetId: number;
   assignedTo: string;
   assignedBy: string;
-  conditionIssued?: "excellent" | "good" | "fair" | "poor" | "damaged";
-  notes?: string;
+  conditionIssued?: "excellent" | "good" | "fair" | "poor" | "damaged"; // Use enum values
   quantity: number;
+  notes?: string;
+  // Optional: Override default location logic
+  forceLocationId?: number;
 }
 
 export interface AssignmentFilters {
@@ -58,11 +60,12 @@ export class AssetAssignmentService {
   /**
    * Create a new asset assignment (works for both unique and bulk assets)
    */
+
   static async createAssignment(
     data: CreateAssignmentData,
   ): Promise<{ success: boolean; assignmentId?: number; message: string }> {
     try {
-      // First, validate the asset exists and get its details
+      // Get asset details with current location
       const asset = await db
         .select({
           assetId: assets.assetId,
@@ -72,6 +75,7 @@ export class AssetAssignmentService {
           currentStockLevel: assets.currentStockLevel,
           individualStatus: assets.individualStatus,
           locationId: assets.locationId,
+          currentKeeperPayrollNumber: assets.keeperPayrollNumber,
         })
         .from(assets)
         .where(eq(assets.assetId, data.assetId))
@@ -83,10 +87,21 @@ export class AssetAssignmentService {
 
       const assetDetails = asset[0];
 
-      // Validate user exists
+      // Get user details including their default location
       const user = await db
-        .select({ payrollNumber: users.payrollNumber })
+        .select({
+          payrollNumber: users.payrollNumber,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          defaultLocationId: users.defaultLocationId,
+          defaultLocation: {
+            locationId: locations.locationId,
+            departmentName: locations.departmentName,
+            regionName: locations.regionName,
+          },
+        })
         .from(users)
+        .leftJoin(locations, eq(users.defaultLocationId, locations.locationId))
         .where(eq(users.payrollNumber, data.assignedTo))
         .limit(1);
 
@@ -94,7 +109,23 @@ export class AssetAssignmentService {
         return { success: false, message: "User not found" };
       }
 
-      // For unique assets, check if already assigned
+      const userDetails = user[0];
+
+      // Determine target location for the asset
+      const targetLocationId =
+        data.forceLocationId || // Manual override
+        userDetails.defaultLocationId || // User's default location
+        assetDetails.locationId; // Fallback to current location
+
+      if (!targetLocationId) {
+        return {
+          success: false,
+          message:
+            "Cannot determine target location. User has no default location set.",
+        };
+      }
+
+      // Validation for unique assets
       if (!assetDetails.isBulk) {
         if (data.quantity !== 1) {
           return {
@@ -110,10 +141,7 @@ export class AssetAssignmentService {
           .where(
             and(
               eq(assetAssignment.assetId, data.assetId),
-              sql`${assetAssignment.assignmentId} NOT IN (
-                SELECT assignment_id FROM asset_assignment 
-                WHERE asset_id = ${data.assetId} AND date_returned IS NOT NULL
-              )`,
+              isNull(assetAssignment.dateReturned), // isNull is now properly imported
             ),
           )
           .limit(1);
@@ -122,7 +150,7 @@ export class AssetAssignmentService {
           return { success: false, message: "Asset is already assigned" };
         }
       } else {
-        // For bulk assets, check stock availability
+        // Bulk asset stock validation
         if (
           !assetDetails.currentStockLevel ||
           assetDetails.currentStockLevel < data.quantity
@@ -140,51 +168,63 @@ export class AssetAssignmentService {
           .where(eq(assets.assetId, data.assetId));
       }
 
-      // Create the assignment
+      // Create the assignment - FIXED: Use proper type for conditionIssued
       const [newAssignment] = await db
         .insert(assetAssignment)
         .values({
           assetId: data.assetId,
           assignedTo: data.assignedTo,
           assignedBy: data.assignedBy,
-          conditionIssued: data.conditionIssued || "good",
+          conditionIssued: (data.conditionIssued || "good") as
+            | "excellent"
+            | "good"
+            | "fair"
+            | "poor"
+            | "damaged",
           notes: data.notes,
           quantity: data.quantity,
         })
         .returning({ assignmentId: assetAssignment.assignmentId });
 
-      // Create movement record
-      await db.insert(assetMovement).values({
-        assetId: data.assetId,
-        toLocationId: assetDetails.locationId,
-        movedBy: data.assignedBy,
-        movementType: "assignment",
-        quantity: data.quantity,
-        notes: `Asset assigned to ${data.assignedTo}`,
-      });
+      // Update asset location and keeper
+      await db
+        .update(assets)
+        .set({
+          locationId: targetLocationId,
+          keeperPayrollNumber: data.assignedTo, // Person becomes responsible
+          individualStatus: !assetDetails.isBulk
+            ? "in_use"
+            : assetDetails.individualStatus,
+          updatedAt: new Date(),
+        })
+        .where(eq(assets.assetId, data.assetId));
 
-      // For unique assets, update status
-      if (!assetDetails.isBulk) {
-        await db
-          .update(assets)
-          .set({
-            individualStatus: "in_use",
-            updatedAt: new Date(),
-          })
-          .where(eq(assets.assetId, data.assetId));
+      // Create movement record if location changed
+      if (assetDetails.locationId !== targetLocationId) {
+        await db.insert(assetMovement).values({
+          assetId: data.assetId,
+          fromLocationId: assetDetails.locationId,
+          toLocationId: targetLocationId,
+          movedBy: data.assignedBy,
+          movementType: "assignment",
+          quantity: data.quantity,
+          notes: `Asset assigned to ${userDetails.firstName} ${userDetails.lastName} (${data.assignedTo}) in ${userDetails.defaultLocation?.departmentName || "Unknown Department"}`,
+        });
       }
 
       return {
         success: true,
         assignmentId: newAssignment.assignmentId,
-        message: "Asset assigned successfully",
+        message: `Asset assigned successfully to ${userDetails.firstName} ${userDetails.lastName}${assetDetails.locationId !== targetLocationId
+            ? ` and moved to ${userDetails.defaultLocation?.departmentName}`
+            : ""
+          }`,
       };
     } catch (error) {
       console.error("Error creating assignment:", error);
       return { success: false, message: "Failed to create assignment" };
     }
   }
-
   /**
    * Get all unique asset assignments with filters
    */
@@ -561,30 +601,6 @@ export class AssetAssignmentService {
     } catch (error) {
       console.error("Error fetching available assets:", error);
       return { success: false, message: "Failed to fetch available assets" };
-    }
-  }
-
-  /**
-   * Get users for assignment dropdown
-   */
-  static async getUsers() {
-    try {
-      const userList = await db
-        .select({
-          payrollNumber: users.payrollNumber,
-          name: sql<string>`${users.firstName} || ' ' || ${users.lastName}`,
-          role: users.role,
-        })
-        .from(users)
-        .orderBy(users.firstName, users.lastName);
-
-      return {
-        success: true,
-        data: userList,
-      };
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      return { success: false, message: "Failed to fetch users" };
     }
   }
 
