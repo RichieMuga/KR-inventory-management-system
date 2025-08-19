@@ -53,6 +53,10 @@ export const users = pgTable("users", {
   role: userRoleEnum("role").notNull().default("viewer"),
   password: varchar("password", { length: 255 }).notNull(),
   mustChangePassword: boolean("must_change_password").notNull().default(true),
+  defaultLocationId: integer("default_location_id").references(
+    () => locations.locationId,
+    { onDelete: "set null" },
+  ),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -208,7 +212,12 @@ export const restockLog = pgTable("restock_log", {
 
 // === RELATIONS ===
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
+  defaultLocation: one(locations, {
+    fields: [users.defaultLocationId],
+    references: [locations.locationId],
+    relationName: "userDefaultLocation",
+  }),
   assets: many(assets, { relationName: "keeper" }),
   movements: many(assetMovement, { relationName: "movedByUser" }),
   assignmentsGiven: many(assetAssignment, { relationName: "assignedBy" }),
@@ -220,6 +229,9 @@ export const locationsRelations = relations(locations, ({ many }) => ({
   assets: many(assets),
   movementsFrom: many(assetMovement, { relationName: "fromLocation" }),
   movementsTo: many(assetMovement, { relationName: "toLocation" }),
+  usersWithDefaultLocation: many(users, {
+    relationName: "userDefaultLocation",
+  }),
 }));
 
 export const assetsRelations = relations(assets, ({ one, many }) => ({
