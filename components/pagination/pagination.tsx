@@ -1,22 +1,20 @@
 "use client";
-
-import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface PaginationProps {
-  initialPage?: number;
-  totalPages?: number;
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
 }
 
 export default function Pagination({
-  initialPage = 1,
-  totalPages = 10,
+  currentPage,
+  totalPages,
+  onPageChange,
 }: PaginationProps) {
-  const [currentPage, setCurrentPage] = useState(initialPage);
-
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
+      onPageChange(page);
     }
   };
 
@@ -77,10 +75,11 @@ export default function Pagination({
           ) : (
             <button
               onClick={() => handlePageChange(page as number)}
-              className={`h-8 w-8 rounded text-sm transition-colors ${currentPage === page
-                  ? "bg-kr-maroon-dark text-white hover:to-kr-maroon"
+              className={`h-8 w-8 rounded text-sm transition-colors ${
+                currentPage === page
+                  ? "bg-kr-maroon-dark text-white hover:bg-kr-maroon"
                   : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
-                }`}
+              }`}
               aria-label={`Page ${page}`}
               aria-current={currentPage === page ? "page" : undefined}
             >
