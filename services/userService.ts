@@ -1,6 +1,6 @@
 import { db } from "@/db/connection";
 import { users, locations } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, ilike } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { sql } from "drizzle-orm";
 
@@ -28,6 +28,15 @@ type UpdateUserInput = Partial<
   departmentName?: string;
   regionName?: string;
   locationNotes?: string;
+};
+
+type GetUsersOptions = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  role?: "admin" | "keeper" | "viewer";
+  departmentName?: string;
+  regionName?: string;
 };
 
 export class UserService {
@@ -210,13 +219,60 @@ export class UserService {
     return deletedUser ?? null;
   }
 
-  static async getAllUsers(page = 1, limit = 10) {
+  /**
+   * Build search conditions for users
+   */
+  private static buildSearchConditions(options: GetUsersOptions) {
+    const conditions = [];
+
+    // Search by payroll number, first name, or last name
+    if (options.search && options.search.trim()) {
+      const searchTerm = `%${options.search.trim()}%`;
+      conditions.push(
+        or(
+          ilike(users.payrollNumber, searchTerm),
+          ilike(users.firstName, searchTerm),
+          ilike(users.lastName, searchTerm),
+          // Also search in concatenated full name
+          ilike(
+            sql`${users.firstName} || ' ' || ${users.lastName}`,
+            searchTerm,
+          ),
+        ),
+      );
+    }
+
+    // Filter by role
+    if (options.role) {
+      conditions.push(eq(users.role, options.role));
+    }
+
+    // Filter by department
+    if (options.departmentName) {
+      conditions.push(
+        ilike(locations.departmentName, `%${options.departmentName}%`),
+      );
+    }
+
+    // Filter by region
+    if (options.regionName) {
+      conditions.push(ilike(locations.regionName, `%${options.regionName}%`));
+    }
+
+    return conditions.length > 0 ? and(...conditions) : undefined;
+  }
+
+  static async getAllUsers(options: GetUsersOptions = {}) {
+    const { page = 1, limit = 10 } = options;
     const safePage = page < 1 ? 1 : page;
     const safeLimit = limit > 100 ? 100 : limit;
     const offset = (safePage - 1) * safeLimit;
 
-    // Fetch paginated data with location details
-    const data = await db
+    // Build WHERE conditions
+    const whereConditions = this.buildSearchConditions(options);
+
+    // Build the data query
+    const baseDataQuery = db
       .select({
         payrollNumber: users.payrollNumber,
         firstName: users.firstName,
@@ -235,23 +291,81 @@ export class UserService {
         },
       })
       .from(users)
-      .leftJoin(locations, eq(users.defaultLocationId, locations.locationId))
-      .limit(safeLimit)
-      .offset(offset);
+      .leftJoin(locations, eq(users.defaultLocationId, locations.locationId));
 
-    // Fetch total count
-    const totalCountResult = await db
+    // Build the count query
+    const baseCountQuery = db
       .select({ count: sql<number>`count(*)` })
-      .from(users);
+      .from(users)
+      .leftJoin(locations, eq(users.defaultLocationId, locations.locationId));
+
+    // Execute queries with or without WHERE conditions
+    const [data, totalCountResult] = await Promise.all([
+      whereConditions
+        ? baseDataQuery
+            .where(whereConditions)
+            .limit(safeLimit)
+            .offset(offset)
+            .orderBy(users.firstName, users.lastName)
+        : baseDataQuery
+            .limit(safeLimit)
+            .offset(offset)
+            .orderBy(users.firstName, users.lastName),
+      whereConditions ? baseCountQuery.where(whereConditions) : baseCountQuery,
+    ]);
+
     const total = totalCountResult[0]?.count ?? 0;
 
     return {
       page: safePage,
       limit: safeLimit,
-      total,
+      total: total.toString(), // Convert to string to match your interface
       totalPages: Math.ceil(total / safeLimit),
       data,
     };
+  }
+
+  /**
+   * Search users with a simple text query (alternative method)
+   */
+  static async searchUsers(query: string, page = 1, limit = 10) {
+    return this.getAllUsers({
+      page,
+      limit,
+      search: query,
+    });
+  }
+
+  /**
+   * Get users by role
+   */
+  static async getUsersByRole(
+    role: "admin" | "keeper" | "viewer",
+    page = 1,
+    limit = 10,
+  ) {
+    return this.getAllUsers({
+      page,
+      limit,
+      role,
+    });
+  }
+
+  /**
+   * Get users by location
+   */
+  static async getUsersByLocation(
+    departmentName?: string,
+    regionName?: string,
+    page = 1,
+    limit = 10,
+  ) {
+    return this.getAllUsers({
+      page,
+      limit,
+      departmentName,
+      regionName,
+    });
   }
 
   /**
@@ -280,5 +394,44 @@ export class UserService {
       .limit(1);
 
     return result[0] ?? null;
+  }
+
+  /**
+   * Get users count by role (for dashboard/stats)
+   */
+  static async getUsersCountByRole() {
+    const result = await db
+      .select({
+        role: users.role,
+        count: sql<number>`count(*)`,
+      })
+      .from(users)
+      .groupBy(users.role);
+
+    return result.reduce(
+      (acc, { role, count }) => {
+        acc[role] = count;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+  }
+
+  /**
+   * Get users count by location (for dashboard/stats)
+   */
+  static async getUsersCountByLocation() {
+    const result = await db
+      .select({
+        departmentName: locations.departmentName,
+        regionName: locations.regionName,
+        count: sql<number>`count(*)`,
+      })
+      .from(users)
+      .innerJoin(locations, eq(users.defaultLocationId, locations.locationId))
+      .groupBy(locations.departmentName, locations.regionName)
+      .orderBy(locations.regionName, locations.departmentName);
+
+    return result;
   }
 }
