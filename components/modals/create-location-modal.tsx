@@ -1,45 +1,100 @@
-"use client"
+"use client";
 
-import React, { useState } from 'react';
-import { X, MapPin, Building, FileText } from 'lucide-react';
+import React from "react";
+import { useForm } from "react-hook-form";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { AxiosError } from "axios";
+import { api } from "@/lib/api/axiosInterceptor"; // Update this path to match your axios instance location
+import { X, MapPin, Building, FileText } from "lucide-react";
+
+interface LocationFormData {
+  regionName: string;
+  departmentName: string;
+  notes: string;
+}
+
+interface LocationResponse {
+  locationId: number;
+  regionName: string;
+  departmentName: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ApiResponse {
+  success: boolean;
+  data: LocationResponse;
+  message: string;
+}
 
 interface CreateLocationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (location: {
-    id: string;
-    region: string;
-    departmentName: string;
-    notes: string;
-  }) => void;
+  onSubmit?: (location: LocationResponse) => void;
 }
 
 const CreateLocationModal: React.FC<CreateLocationModalProps> = ({
   isOpen,
   onClose,
+  onSubmit,
 }) => {
-  const [formData, setFormData] = useState({
-    id: '',
-    region: '',
-    departmentName: '',
-    notes: '',
+  const queryClient = useQueryClient();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm<LocationFormData>({
+    defaultValues: {
+      regionName: "",
+      departmentName: "",
+      notes: "",
+    },
   });
 
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const regions = [
+    "Nairobi",
+    "Mombasa",
+    "Kisumu",
+    "Nakuru",
+    "Eldoret",
+    "Nyeri",
+  ];
 
-  const regions = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Nyeri'];
+  // Create location mutation
+  const createLocationMutation = useMutation({
+    mutationFn: async (data: LocationFormData): Promise<ApiResponse> => {
+      const response = await api.post("/locations", data);
+      return response.data;
+    },
+    onSuccess: (response) => {
+      // Invalidate and refetch any queries related to locations
+      queryClient.invalidateQueries({ queryKey: ["locations"] });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("Submit")
+      // Call the onSubmit prop if provided
+      if (onSubmit) {
+        onSubmit(response.data);
+      }
+
+      // Reset form and close modal
+      reset();
+      onClose();
+    },
+    onError: (error) => {
+      console.error("Error creating location:", error);
+      // You might want to show a toast notification here
+    },
+  });
+
+  const onFormSubmit = (data: LocationFormData) => {
+    createLocationMutation.mutate(data);
   };
 
-  const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
+  const handleClose = () => {
+    reset();
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -51,50 +106,56 @@ const CreateLocationModal: React.FC<CreateLocationModalProps> = ({
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center space-x-2">
             <MapPin className="h-5 w-5 text-kr-orange" />
-            <h2 className="text-xl font-semibold text-gray-900">Create New Location</h2>
+            <h2 className="text-xl font-semibold text-gray-900">
+              Create New Location
+            </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
+            disabled={createLocationMutation.isPending}
           >
             <X className="h-6 w-6" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(onFormSubmit)} className="p-6 space-y-6">
           <p className="text-gray-600 text-sm">
-            Add a new location to the system with its details and regional assignment.
+            Add a new location to the system with its details and regional
+            assignment.
           </p>
 
-          {/* Location ID */}
-          <div>
-            <label htmlFor="locationId" className="block text-sm font-medium text-gray-700 mb-2">
-              Location ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="locationId"
-              placeholder="e.g. L011"
-              value={formData.id}
-              onChange={(e) => handleChange('id', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-kr-orange focus:border-kr-orange transition-colors ${errors.id ? 'border-red-500' : 'border-gray-300'
-                }`}
-            />
-            {errors.id && <p className="text-red-500 text-sm mt-1">{errors.id}</p>}
-          </div>
+          {/* General error message */}
+          {createLocationMutation.isError && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-3">
+              <p className="text-red-600 text-sm">
+                {createLocationMutation.error instanceof AxiosError
+                  ? createLocationMutation.error.response?.data?.message ||
+                    createLocationMutation.error.message ||
+                    "Failed to create location"
+                  : "An unexpected error occurred"}
+              </p>
+            </div>
+          )}
 
           {/* Region */}
           <div>
-            <label htmlFor="region" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="regionName"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Region <span className="text-red-500">*</span>
             </label>
             <select
-              id="region"
-              value={formData.region}
-              onChange={(e) => handleChange('region', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-kr-orange focus:border-kr-orange transition-colors ${errors.region ? 'border-red-500' : 'border-gray-300'
-                }`}
+              id="regionName"
+              {...register("regionName", {
+                required: "Region is required",
+              })}
+              className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-kr-orange focus:border-kr-orange transition-colors ${
+                errors.regionName ? "border-red-500" : "border-gray-300"
+              }`}
+              disabled={createLocationMutation.isPending}
             >
               <option value="">Select a region</option>
               {regions.map((region) => (
@@ -103,12 +164,19 @@ const CreateLocationModal: React.FC<CreateLocationModalProps> = ({
                 </option>
               ))}
             </select>
-            {errors.region && <p className="text-red-500 text-sm mt-1">{errors.region}</p>}
+            {errors.regionName && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.regionName.message}
+              </p>
+            )}
           </div>
 
           {/* Department Name */}
           <div>
-            <label htmlFor="departmentName" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="departmentName"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Department Name <span className="text-red-500">*</span>
             </label>
             <div className="relative">
@@ -118,19 +186,33 @@ const CreateLocationModal: React.FC<CreateLocationModalProps> = ({
               <input
                 type="text"
                 id="departmentName"
-                placeholder="e.g. IT Store Room C"
-                value={formData.departmentName}
-                onChange={(e) => handleChange('departmentName', e.target.value)}
-                className={`w-full pl-10 pr-3 py-2 border rounded-md focus:ring-2 focus:ring-kr-orange focus:border-kr-orange transition-colors ${errors.departmentName ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                placeholder="e.g. ICT WING B"
+                {...register("departmentName", {
+                  required: "Department name is required",
+                  minLength: {
+                    value: 2,
+                    message: "Department name must be at least 2 characters",
+                  },
+                })}
+                className={`w-full pl-10 pr-3 py-2 border rounded-md focus:ring-2 focus:ring-kr-orange focus:border-kr-orange transition-colors ${
+                  errors.departmentName ? "border-red-500" : "border-gray-300"
+                }`}
+                disabled={createLocationMutation.isPending}
               />
             </div>
-            {errors.departmentName && <p className="text-red-500 text-sm mt-1">{errors.departmentName}</p>}
+            {errors.departmentName && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.departmentName.message}
+              </p>
+            )}
           </div>
 
           {/* Notes */}
           <div>
-            <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="notes"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Notes <span className="text-red-500">*</span>
             </label>
             <div className="relative">
@@ -140,32 +222,48 @@ const CreateLocationModal: React.FC<CreateLocationModalProps> = ({
               <textarea
                 id="notes"
                 rows={3}
-                placeholder="e.g. Tertiary IT storage and backup systems"
-                value={formData.notes}
-                onChange={(e) => handleChange('notes', e.target.value)}
-                className={`w-full pl-10 pr-3 py-2 border rounded-md focus:ring-2 focus:ring-kr-orange focus:border-kr-orange transition-colors resize-none ${errors.notes ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                placeholder="e.g. In ICT"
+                {...register("notes", {
+                  required: "Notes are required",
+                  minLength: {
+                    value: 3,
+                    message: "Notes must be at least 3 characters",
+                  },
+                })}
+                className={`w-full pl-10 pr-3 py-2 border rounded-md focus:ring-2 focus:ring-kr-orange focus:border-kr-orange transition-colors resize-none ${
+                  errors.notes ? "border-red-500" : "border-gray-300"
+                }`}
+                disabled={createLocationMutation.isPending}
               />
             </div>
-            {errors.notes && <p className="text-red-500 text-sm mt-1">{errors.notes}</p>}
+            {errors.notes && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.notes.message}
+              </p>
+            )}
           </div>
 
           {/* Action Buttons */}
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+              onClick={handleClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={createLocationMutation.isPending}
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={createLocationMutation.isPending}
               className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-kr-maroon hover:bg-kr-maroon/90 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <MapPin className="h-4 w-4" />
-              <span>{isSubmitting ? 'Creating...' : 'Create Location'}</span>
+              <span>
+                {createLocationMutation.isPending
+                  ? "Creating..."
+                  : "Create Location"}
+              </span>
             </button>
           </div>
         </form>
