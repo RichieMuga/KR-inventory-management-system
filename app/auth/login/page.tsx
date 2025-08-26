@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import Link from "next/link";
 import { Eye, EyeOff, LogIn } from "lucide-react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { useMutation } from "@tanstack/react-query";
 
+import { api } from "@/lib/api/axiosInterceptor";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,41 +17,84 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+// 🔹 Extend schema to include showPassword (non-submitted field)
+const loginSchema = z.object({
+  payrollNumber: z.string().min(1, "Payroll number is required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  showPassword: z.boolean().optional(), // For UI control
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
+
+type LoginResponse = {
+  accessToken: string;
+  mustChangePassword: boolean;
+};
+
+const login = async (values: LoginFormData): Promise<LoginResponse> => {
+  const { showPassword, ...submitData } = values;
+  const response = await api.post("/auth/login", submitData);
+  return response.data;
+};
+
 export default function LoginPage() {
-  const [formData, setFormData] = useState({
-    payrollNumber: "",
-    password: "",
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const router = useRouter();
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  const form = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      payrollNumber: "",
+      password: "",
+      showPassword: false,
+    },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+  const mutation = useMutation<
+    LoginResponse,
+    Error,
+    Omit<LoginFormData, "showPassword">
+  >({
+    mutationFn: login,
+    onSuccess: (data) => {
+      const { accessToken, mustChangePassword } = data;
 
-    // TODO: Replace with your API implementation
-    console.log("Login attempt:", formData);
+      if (!accessToken || typeof accessToken !== "string") {
+        form.setError("root", {
+          message: "Invalid token received from server.",
+        });
+        return;
+      }
 
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
-      // Add your login logic here
-    }, 1000);
+      localStorage.setItem("authToken", accessToken);
+
+      if (mustChangePassword) {
+        router.push("/auth/change-password");
+      } else {
+        router.push("/dashboard");
+      }
+    },
+    onError: (err) => {
+      form.setError("root", {
+        message: err.message || "Invalid credentials. Please try again.",
+      });
+    },
+  });
+
+  const onSubmit = (values: LoginFormData) => {
+    form.clearErrors("root");
+    const { showPassword, ...submitData } = values;
+    mutation.mutate(submitData);
   };
 
   return (
@@ -75,87 +121,92 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {error && (
+          {form.formState.errors.root && (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                {form.formState.errors.root.message?.toString()}
+              </AlertDescription>
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label
-                htmlFor="payrollNumber"
-                className="text-sm font-medium text-gray-700"
-              >
-                Payroll Number
-              </Label>
-              <Input
-                id="payrollNumber"
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
                 name="payrollNumber"
-                type="text"
-                required
-                value={formData.payrollNumber}
-                onChange={handleInputChange}
-                placeholder="Enter your payroll number"
-                className="w-full"
-                disabled={loading}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Payroll Number</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter payroll number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <div className="space-y-2">
-              <Label
-                htmlFor="password"
-                className="text-sm font-medium text-gray-700"
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Input
+                          type={
+                            form.watch("showPassword") ? "text" : "password"
+                          }
+                          placeholder="Enter your password"
+                          {...field}
+                          className="pr-10"
+                          disabled={mutation.isPending}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() =>
+                            form.setValue(
+                              "showPassword",
+                              !form.getValues("showPassword"),
+                            )
+                          }
+                          disabled={mutation.isPending}
+                        >
+                          {form.watch("showPassword") ? (
+                            <EyeOff className="h-4 w-4 text-gray-400" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-gray-400" />
+                          )}
+                        </Button>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Button
+                type="submit"
+                className="w-full bg-kr-orange hover:bg-kr-orange-dark text-white font-medium py-2 px-4 rounded-md transition-colors duration-200"
+                disabled={mutation.isPending}
               >
-                Password
-              </Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  required
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  placeholder="Enter your password"
-                  className="w-full pr-10"
-                  disabled={loading}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
-                  disabled={loading}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-gray-400" />
-                  ) : (
-                    <Eye className="h-4 w-4 text-gray-400" />
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full bg-kr-orange hover:bg-kr-orange-dark text-white font-medium py-2 px-4 rounded-md transition-colors duration-200"
-              disabled={loading}
-            >
-              {loading ? (
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Signing in...
-                </div>
-              ) : (
-                <div className="flex items-center justify-center">
-                  <LogIn className="h-4 w-4 mr-2" />
-                  Sign In
-                </div>
-              )}
-            </Button>
-          </form>
+                {mutation.isPending ? (
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Signing in...
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center">
+                    <LogIn className="h-4 w-4 mr-2" />
+                    Sign In
+                  </div>
+                )}
+              </Button>
+            </form>
+          </Form>
 
           <div className="text-center">
             <p className="text-sm text-gray-600">

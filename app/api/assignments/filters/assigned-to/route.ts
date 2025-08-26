@@ -4,28 +4,20 @@ import { AssetAssignmentService } from "@/services/assetAssignmentService";
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-
+    const assignedTo = searchParams.get("assignedTo");
     const type = (searchParams.get("type") as "unique" | "bulk") || "unique";
-    const assignedBy = searchParams.get("assignedBy") || undefined;
-    const assignedTo = searchParams.get("assignedTo") || undefined;
-    const search = searchParams.get("search") || undefined;
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
-    const sortBy = (searchParams.get("sortBy") as any) || "dateIssued";
-    const sortOrder =
-      (searchParams.get("sortOrder") as "asc" | "desc") || "desc";
-    const status =
-      (searchParams.get("status") as "active" | "returned") || undefined;
+
+    if (!assignedTo) {
+      return NextResponse.json(
+        { error: "assignedTo parameter is required" },
+        { status: 400 },
+      );
+    }
 
     const filters = {
-      assignedBy,
       assignedTo,
-      search,
-      page,
-      limit,
-      sortBy,
-      sortOrder,
-      status,
+      page: 1,
+      limit: 100,
     };
 
     let result;
@@ -36,14 +28,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (!result.success) {
-      return NextResponse.json(
-        { error: "Internal server error" },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: result.message }, { status: 400 });
     }
+
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Error in bulk assignments GET:", error);
+    console.error("Error in assignments GET:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
@@ -55,10 +45,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate required fields for bulk assignment
-    const { assetId, assignedTo, assignedBy, quantity } = body;
+    // Validate required fields
+    const {
+      assetId,
+      assignedTo,
+      assignedBy,
+      quantity,
+      assignmentDate,
+      dueDate,
+      notes,
+    } = body;
 
-    if (!assetId || !assignedTo || !assignedBy || !quantity) {
+    if (!assetId || !assignedTo || !assignedBy || quantity === undefined) {
       return NextResponse.json(
         {
           error:
@@ -68,18 +66,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (quantity <= 0) {
+    // Validate quantity is a positive number
+    if (typeof quantity !== "number" || quantity <= 0) {
       return NextResponse.json(
-        { error: "Quantity must be greater than 0" },
+        { error: "Quantity must be a positive number" },
         { status: 400 },
       );
     }
 
-    // Ensure this is for a bulk asset
-    const result = await AssetAssignmentService.createAssignment({
-      ...body,
-      quantity: parseInt(quantity), // Ensure quantity is a number
-    });
+    // Prepare assignment data
+    const assignmentData = {
+      assetId,
+      assignedTo,
+      assignedBy,
+      quantity,
+      assignmentDate: assignmentDate || new Date().toISOString(),
+      dueDate: dueDate || null,
+      notes: notes || "",
+      status: "active",
+    };
+
+    // Create the assignment
+    const result =
+      await AssetAssignmentService.createAssignment(assignmentData);
 
     if (!result.success) {
       return NextResponse.json({ error: result.message }, { status: 400 });
@@ -87,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    console.error("Error in bulk assignment POST:", error);
+    console.error("Error in assignments POST:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

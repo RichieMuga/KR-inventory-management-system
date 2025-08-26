@@ -1,4 +1,3 @@
-// src/app/api/dashboard/activity/route.ts
 import { DashboardService } from "@/services/dashboardServices";
 import { NextResponse } from "next/server";
 

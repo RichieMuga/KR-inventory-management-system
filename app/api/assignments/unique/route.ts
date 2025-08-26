@@ -5,7 +5,6 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const type = (searchParams.get("type") as "unique" | "bulk") || "unique";
     const assignedBy = searchParams.get("assignedBy") || undefined;
     const assignedTo = searchParams.get("assignedTo") || undefined;
     const search = searchParams.get("search") || undefined;
@@ -28,22 +27,15 @@ export async function GET(request: NextRequest) {
       status,
     };
 
-    let result;
-    if (type === "bulk") {
-      result = await AssetAssignmentService.getBulkAssignments(filters);
-    } else {
-      result = await AssetAssignmentService.getUniqueAssignments(filters);
-    }
+    const result = await AssetAssignmentService.getUniqueAssignments(filters);
 
     if (!result.success) {
-      return NextResponse.json(
-        { error: "Internal server error" },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: result.message }, { status: 400 });
     }
+
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Error in bulk assignments GET:", error);
+    console.error("Error in unique assignments GET:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
@@ -55,31 +47,24 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate required fields for bulk assignment
-    const { assetId, assignedTo, assignedBy, quantity } = body;
+    // Validate required fields for unique assignment
+    const { assetId, assignedTo, assignedBy } = body;
 
-    if (!assetId || !assignedTo || !assignedBy || !quantity) {
+    if (!assetId || !assignedTo || !assignedBy) {
       return NextResponse.json(
-        {
-          error:
-            "Missing required fields: assetId, assignedTo, assignedBy, quantity",
-        },
+        { error: "Missing required fields: assetId, assignedTo, assignedBy" },
         { status: 400 },
       );
     }
 
-    if (quantity <= 0) {
-      return NextResponse.json(
-        { error: "Quantity must be greater than 0" },
-        { status: 400 },
-      );
-    }
-
-    // Ensure this is for a bulk asset
-    const result = await AssetAssignmentService.createAssignment({
+    // Force quantity to 1 for unique assets
+    const assignmentData = {
       ...body,
-      quantity: parseInt(quantity), // Ensure quantity is a number
-    });
+      quantity: 1,
+    };
+
+    const result =
+      await AssetAssignmentService.createAssignment(assignmentData);
 
     if (!result.success) {
       return NextResponse.json({ error: result.message }, { status: 400 });
@@ -87,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    console.error("Error in bulk assignment POST:", error);
+    console.error("Error in unique assignment POST:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

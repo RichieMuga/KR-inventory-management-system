@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LocationService } from "@/services/locationService";
-import { withKeeperAuth, AuthenticatedRequest } from "@/middleware/authMiddleware";
+import {
+  withKeeperAuth,
+  AuthenticatedRequest,
+} from "@/middleware/authMiddleware";
 import * as schema from "@/db/schema";
 
-// GET /api/locations - Get all locations with pagination (requires keeper or admin)
+// GET /api/locations - Get all locations with pagination and search
 async function getLocations(req: AuthenticatedRequest): Promise<NextResponse> {
   try {
     const { searchParams } = new URL(req.url);
@@ -16,9 +19,13 @@ async function getLocations(req: AuthenticatedRequest): Promise<NextResponse> {
     );
     const offset = (page - 1) * limit;
 
+    // Search parameter
+    const search = searchParams.get("search")?.trim() || "";
+
+    // Fetch locations with search (pass search to both methods)
     const [locations, totalCount] = await Promise.all([
-      LocationService.getAllPaginated(limit, offset),
-      LocationService.count(),
+      LocationService.getAllPaginated(limit, offset, search || undefined),
+      LocationService.count(search || undefined),
     ]);
 
     const totalPages = Math.ceil(totalCount / limit);
@@ -37,6 +44,8 @@ async function getLocations(req: AuthenticatedRequest): Promise<NextResponse> {
           nextPage: page < totalPages ? page + 1 : null,
           previousPage: page > 1 ? page - 1 : null,
         },
+        // Include search info in response
+        search: search || undefined,
       },
       { status: 200 },
     );

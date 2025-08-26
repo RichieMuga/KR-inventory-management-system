@@ -1,16 +1,20 @@
+"use client"
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import StoreProvider from "@/lib/StoreProvider";
 import { Header } from "@/components/layout/header";
-
-export const metadata: Metadata = {
-  title: "KR Store keeping and Asset tracking",
-  icons: {
-    icon: "/favicon.ico"
-  },
-};
+import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
+//
+// export const metadata: Metadata = {
+//   title: "KR Store keeping and Asset tracking",
+//   icons: {
+//     icon: "/favicon.ico",
+//   },
+// };
+//
+const queryClient = new QueryClient();
 
 export default function RootLayout({
   children,
@@ -30,7 +34,11 @@ html {
       </head>
       <body>
         <Header />
-        <StoreProvider>{children}</StoreProvider>
+        <StoreProvider>
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        </StoreProvider>
       </body>
     </html>
   );

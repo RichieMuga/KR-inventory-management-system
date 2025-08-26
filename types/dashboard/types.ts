@@ -1,4 +1,18 @@
-// src/app/api/dashboard/types.ts
+import { NextRequest } from "next/server";
+
+export interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role?: string;
+  // Add other user properties as needed
+}
+
+export interface AuthenticatedRequest extends NextRequest {
+  user: User;
+}
+
 export interface UniqueAssetStats {
   totalUnique: number;
   assignedUnique: number;

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { UserPlus, Save } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { UserPlus, Save, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,77 +24,135 @@ import { Badge } from "@/components/ui/badge";
 import { toggleUserModal } from "@/lib/features/modals/user-creation-modal";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/store";
+import { api } from "@/lib/api/axiosInterceptor"; // Your axios instance
+import { toast } from "sonner"; // Assuming you're using sonner for toasts
 
 interface User {
   payrollNumber: string;
   firstName: string;
   lastName: string;
-  role: "Admin" | "Keeper" | "Viewer";
+  role: "admin" | "keeper" | "viewer";
+  defaultLocationId?: number;
 }
 
+interface CreateUserResponse {
+  success: boolean;
+  createdBy: {
+    payrollNumber: string;
+    role: string;
+  };
+  user: {
+    payrollNumber: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    password: string;
+    mustChangePassword: boolean;
+    defaultLocationId: number;
+    createdAt: string;
+    updatedAt: string;
+    defaultLocation: {
+      locationId: number;
+      regionName: string;
+      departmentName: string;
+      notes: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  };
+}
 
-const roleOptions = ["Admin", "Keeper", "Viewer"] as const;
+const roleOptions = [
+  { value: "admin", label: "Admin" },
+  { value: "keeper", label: "Keeper" },
+  { value: "viewer", label: "Viewer" },
+] as const;
+
+// API function
+const createUser = async (userData: User): Promise<CreateUserResponse> => {
+  const response = await api.post("/users", {
+    ...userData,
+    defaultLocationId: userData.defaultLocationId || 1, // Default to location 1
+  });
+  return response.data;
+};
 
 export default function CreateUserModal() {
-  const [user, setUser] = useState<User>({
-    payrollNumber: "",
-    firstName: "",
-    lastName: "",
-    role: "Viewer",
+  const dispatch = useDispatch();
+  const queryClient = useQueryClient();
+  const { isUserModalOpen } = useSelector(
+    (state: RootState) => state.userModal,
+  );
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+    watch,
+    setValue,
+    clearErrors,
+  } = useForm<User>({
+    defaultValues: {
+      payrollNumber: "",
+      firstName: "",
+      lastName: "",
+      role: "viewer",
+      defaultLocationId: 1,
+    },
   });
 
-  const dispatch = useDispatch()
+  const currentRole = watch("role");
 
-  const { isUserModalOpen } = useSelector((state: RootState) => state.userModal)
-
-  const [errors, setErrors] = useState<Partial<Record<keyof User, string>>>({});
-
-  const updateUser = (field: keyof User, value: string) => {
-    setUser((prev) => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: "" }));
-    }
-  };
-
-  const validateForm = (): boolean => {
-    const newErrors: Partial<Record<keyof User, string>> = {};
-
-    if (!user.payrollNumber.trim()) {
-      newErrors.payrollNumber = "Payroll number is required";
-    }
-    if (!user.firstName.trim()) {
-      newErrors.firstName = "First name is required";
-    }
-    if (!user.lastName.trim()) {
-      newErrors.lastName = "Last name is required";
-    }
-    if (!user.role) {
-      newErrors.role = "Role is required";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSave = () => {
-    console.log("Saved")
-  };
+  const createUserMutation = useMutation({
+    mutationFn: createUser,
+    onSuccess: (data) => {
+      toast.success(
+        `User ${data.user.firstName} ${data.user.lastName} created successfully!`,
+      );
+      // Invalidate and refetch users query
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      handleClose();
+    },
+    onError: (error: any) => {
+      const errorMessage =
+        error.response?.data?.message || "Failed to create user";
+      toast.error(errorMessage);
+    },
+  });
 
   const handleClose = () => {
-    dispatch(toggleUserModal())
+    reset();
+    dispatch(toggleUserModal());
+  };
+
+  const onSubmit = (data: User) => {
+    createUserMutation.mutate(data);
   };
 
   const getRoleColor = (role: string) => {
-    switch (role) {
-      case "Admin":
+    switch (role.toLowerCase()) {
+      case "admin":
         return "bg-red-900 text-white";
-      case "Keeper":
+      case "keeper":
         return "bg-orange-600 text-white";
-      case "Viewer":
+      case "viewer":
         return "bg-gray-200 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getRolePermissions = (role: string) => {
+    switch (role.toLowerCase()) {
+      case "admin":
+        return "• Full system access including user management and system configuration";
+      case "keeper":
+        return "• Can manage assets, update inventory, and handle asset assignments";
+      case "viewer":
+        return "• Read-only access to view assets and reports";
+      default:
+        return "";
     }
   };
 
@@ -110,12 +169,14 @@ export default function CreateUserModal() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Mobile Layout */}
           <div className="lg:hidden space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-medium">User Information</h3>
-              <Badge className={getRoleColor(user.role)}>{user.role}</Badge>
+              <Badge className={getRoleColor(currentRole)}>
+                {roleOptions.find((r) => r.value === currentRole)?.label}
+              </Badge>
             </div>
 
             <div className="space-y-4">
@@ -125,13 +186,19 @@ export default function CreateUserModal() {
                 </label>
                 <Input
                   placeholder="e.g. P011"
-                  value={user.payrollNumber}
-                  onChange={(e) => updateUser("payrollNumber", e.target.value)}
+                  {...register("payrollNumber", {
+                    required: "Payroll number is required",
+                    pattern: {
+                      value: /^[A-Za-z0-9]+$/,
+                      message:
+                        "Payroll number should contain only letters and numbers",
+                    },
+                  })}
                   className={errors.payrollNumber ? "border-red-500" : ""}
                 />
                 {errors.payrollNumber && (
                   <p className="text-red-500 text-xs mt-1">
-                    {errors.payrollNumber}
+                    {errors.payrollNumber.message}
                   </p>
                 )}
               </div>
@@ -143,13 +210,18 @@ export default function CreateUserModal() {
                   </label>
                   <Input
                     placeholder="e.g. John"
-                    value={user.firstName}
-                    onChange={(e) => updateUser("firstName", e.target.value)}
+                    {...register("firstName", {
+                      required: "First name is required",
+                      minLength: {
+                        value: 2,
+                        message: "First name must be at least 2 characters",
+                      },
+                    })}
                     className={errors.firstName ? "border-red-500" : ""}
                   />
                   {errors.firstName && (
                     <p className="text-red-500 text-xs mt-1">
-                      {errors.firstName}
+                      {errors.firstName.message}
                     </p>
                   )}
                 </div>
@@ -160,13 +232,18 @@ export default function CreateUserModal() {
                   </label>
                   <Input
                     placeholder="e.g. Doe"
-                    value={user.lastName}
-                    onChange={(e) => updateUser("lastName", e.target.value)}
+                    {...register("lastName", {
+                      required: "Last name is required",
+                      minLength: {
+                        value: 2,
+                        message: "Last name must be at least 2 characters",
+                      },
+                    })}
                     className={errors.lastName ? "border-red-500" : ""}
                   />
                   {errors.lastName && (
                     <p className="text-red-500 text-xs mt-1">
-                      {errors.lastName}
+                      {errors.lastName.message}
                     </p>
                   )}
                 </div>
@@ -177,8 +254,11 @@ export default function CreateUserModal() {
                   Role <span className="text-red-500">*</span>
                 </label>
                 <Select
-                  value={user.role}
-                  onValueChange={(value) => updateUser("role", value)}
+                  value={currentRole}
+                  onValueChange={(value) => {
+                    setValue("role", value as "admin" | "keeper" | "viewer");
+                    clearErrors("role");
+                  }}
                 >
                   <SelectTrigger
                     className={errors.role ? "border-red-500" : ""}
@@ -187,12 +267,12 @@ export default function CreateUserModal() {
                   </SelectTrigger>
                   <SelectContent>
                     {roleOptions.map((role) => (
-                      <SelectItem key={role} value={role}>
+                      <SelectItem key={role.value} value={role.value}>
                         <div className="flex items-center gap-2">
                           <Badge
-                            className={`${getRoleColor(role)} text-xs px-2 py-0.5`}
+                            className={`${getRoleColor(role.value)} text-xs px-2 py-0.5`}
                           >
-                            {role}
+                            {role.label}
                           </Badge>
                         </div>
                       </SelectItem>
@@ -200,7 +280,9 @@ export default function CreateUserModal() {
                   </SelectContent>
                 </Select>
                 {errors.role && (
-                  <p className="text-red-500 text-xs mt-1">{errors.role}</p>
+                  <p className="text-red-500 text-xs mt-1">
+                    {errors.role.message}
+                  </p>
                 )}
               </div>
             </div>
@@ -215,13 +297,19 @@ export default function CreateUserModal() {
                 </label>
                 <Input
                   placeholder="e.g. P011"
-                  value={user.payrollNumber}
-                  onChange={(e) => updateUser("payrollNumber", e.target.value)}
+                  {...register("payrollNumber", {
+                    required: "Payroll number is required",
+                    pattern: {
+                      value: /^[A-Za-z0-9]+$/,
+                      message:
+                        "Payroll number should contain only letters and numbers",
+                    },
+                  })}
                   className={errors.payrollNumber ? "border-red-500" : ""}
                 />
                 {errors.payrollNumber && (
                   <p className="text-red-500 text-xs mt-1">
-                    {errors.payrollNumber}
+                    {errors.payrollNumber.message}
                   </p>
                 )}
               </div>
@@ -231,8 +319,11 @@ export default function CreateUserModal() {
                   Role <span className="text-red-500">*</span>
                 </label>
                 <Select
-                  value={user.role}
-                  onValueChange={(value) => updateUser("role", value)}
+                  value={currentRole}
+                  onValueChange={(value) => {
+                    setValue("role", value as "admin" | "keeper" | "viewer");
+                    clearErrors("role");
+                  }}
                 >
                   <SelectTrigger
                     className={errors.role ? "border-red-500" : ""}
@@ -241,12 +332,12 @@ export default function CreateUserModal() {
                   </SelectTrigger>
                   <SelectContent>
                     {roleOptions.map((role) => (
-                      <SelectItem key={role} value={role}>
+                      <SelectItem key={role.value} value={role.value}>
                         <div className="flex items-center gap-2">
                           <Badge
-                            className={`${getRoleColor(role)} text-xs px-2 py-0.5`}
+                            className={`${getRoleColor(role.value)} text-xs px-2 py-0.5`}
                           >
-                            {role}
+                            {role.label}
                           </Badge>
                         </div>
                       </SelectItem>
@@ -254,7 +345,9 @@ export default function CreateUserModal() {
                   </SelectContent>
                 </Select>
                 {errors.role && (
-                  <p className="text-red-500 text-xs mt-1">{errors.role}</p>
+                  <p className="text-red-500 text-xs mt-1">
+                    {errors.role.message}
+                  </p>
                 )}
               </div>
             </div>
@@ -266,13 +359,18 @@ export default function CreateUserModal() {
                 </label>
                 <Input
                   placeholder="e.g. John"
-                  value={user.firstName}
-                  onChange={(e) => updateUser("firstName", e.target.value)}
+                  {...register("firstName", {
+                    required: "First name is required",
+                    minLength: {
+                      value: 2,
+                      message: "First name must be at least 2 characters",
+                    },
+                  })}
                   className={errors.firstName ? "border-red-500" : ""}
                 />
                 {errors.firstName && (
                   <p className="text-red-500 text-xs mt-1">
-                    {errors.firstName}
+                    {errors.firstName.message}
                   </p>
                 )}
               </div>
@@ -283,12 +381,19 @@ export default function CreateUserModal() {
                 </label>
                 <Input
                   placeholder="e.g. Doe"
-                  value={user.lastName}
-                  onChange={(e) => updateUser("lastName", e.target.value)}
+                  {...register("lastName", {
+                    required: "Last name is required",
+                    minLength: {
+                      value: 2,
+                      message: "Last name must be at least 2 characters",
+                    },
+                  })}
                   className={errors.lastName ? "border-red-500" : ""}
                 />
                 {errors.lastName && (
-                  <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>
+                  <p className="text-red-500 text-xs mt-1">
+                    {errors.lastName.message}
+                  </p>
                 )}
               </div>
             </div>
@@ -299,42 +404,35 @@ export default function CreateUserModal() {
             <h4 className="text-sm font-medium text-gray-700 mb-2">
               Role Permissions:
             </h4>
-            <div className="text-xs text-gray-600 space-y-1">
-              {user.role === "Admin" && (
-                <p>
-                  • Full system access including user management and system
-                  configuration
-                </p>
-              )}
-              {user.role === "Keeper" && (
-                <p>
-                  • Can manage assets, update inventory, and handle asset
-                  assignments
-                </p>
-              )}
-              {user.role === "Viewer" && (
-                <p>• Read-only access to view assets and reports</p>
-              )}
+            <div className="text-xs text-gray-600">
+              <p>{getRolePermissions(currentRole)}</p>
             </div>
           </div>
-        </div>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            className="w-full sm:w-auto"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            className="bg-red-800 hover:bg-red-900 text-white w-full sm:w-auto"
-          >
-            <Save className="w-4 h-4 mr-2" />
-            Create User
-          </Button>
-        </DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClose}
+              className="w-full sm:w-auto"
+              disabled={createUserMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              className="bg-red-800 hover:bg-red-900 text-white w-full sm:w-auto"
+              disabled={createUserMutation.isPending}
+            >
+              {createUserMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              {createUserMutation.isPending ? "Creating..." : "Create User"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
