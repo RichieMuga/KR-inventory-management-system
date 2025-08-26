@@ -36,6 +36,16 @@ interface SetSearchQueryPayload {
   query: string;
 }
 
+interface SetItemsPerPagePayload {
+  section: keyof PaginationSliceState;
+  itemsPerPage: number;
+}
+
+interface SetFiltersPayload {
+  section: keyof PaginationSliceState;
+  filters: Record<string, any>;
+}
+
 const paginationSlice = createSlice({
   name: "pagination",
   initialState,
@@ -51,7 +61,40 @@ const paginationSlice = createSlice({
       const { section, query } = action.payload;
       if (state[section]) {
         state[section].searchQuery = query;
-        state[section].currentPage = 1; // Reset to first page when searching
+        // Only reset to page 1 if we're not already on page 1
+        // This prevents unnecessary re-renders
+        if (state[section].currentPage !== 1) {
+          state[section].currentPage = 1;
+        }
+      }
+    },
+
+    setItemsPerPage: (state, action: PayloadAction<SetItemsPerPagePayload>) => {
+      const { section, itemsPerPage } = action.payload;
+      if (state[section]) {
+        state[section].itemsPerPage = itemsPerPage;
+        // Reset to page 1 when changing items per page
+        state[section].currentPage = 1;
+      }
+    },
+
+    setFilters: (state, action: PayloadAction<SetFiltersPayload>) => {
+      const { section, filters } = action.payload;
+      if (state[section]) {
+        state[section].filters = filters;
+        // Reset to page 1 when filters change
+        state[section].currentPage = 1;
+      }
+    },
+
+    clearSearch: (
+      state,
+      action: PayloadAction<{ section: keyof PaginationSliceState }>,
+    ) => {
+      const { section } = action.payload;
+      if (state[section]) {
+        state[section].searchQuery = "";
+        state[section].currentPage = 1;
       }
     },
 
@@ -64,11 +107,26 @@ const paginationSlice = createSlice({
         state[section] = { ...initialPaginationState };
       }
     },
+
+    resetAllSections: (state) => {
+      Object.keys(state).forEach((section) => {
+        state[section as keyof PaginationSliceState] = {
+          ...initialPaginationState,
+        };
+      });
+    },
   },
 });
 
-export const { setCurrentPage, setSearchQuery, resetSection } =
-  paginationSlice.actions;
+export const {
+  setCurrentPage,
+  setSearchQuery,
+  setItemsPerPage,
+  setFilters,
+  clearSearch,
+  resetSection,
+  resetAllSections,
+} = paginationSlice.actions;
 
 // Selectors
 export const selectSectionPagination = (
@@ -81,11 +139,69 @@ export const selectSectionQueryParams = (
   section: keyof PaginationSliceState,
 ) => {
   const sectionState = state.pagination[section];
-  return {
+  const params: Record<string, any> = {
     page: sectionState.currentPage,
     limit: sectionState.itemsPerPage,
-    search: sectionState.searchQuery || undefined,
   };
+
+  // Only include search parameter if it has a value and is not empty
+  if (sectionState.searchQuery && sectionState.searchQuery.trim() !== "") {
+    params.search = sectionState.searchQuery.trim();
+  }
+
+  // Include filters if they exist and are not empty
+  if (sectionState.filters && Object.keys(sectionState.filters).length > 0) {
+    // Flatten filters into query params or keep as nested object based on your API needs
+    Object.entries(sectionState.filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        params[key] = value;
+      }
+    });
+  }
+
+  return params;
+};
+
+// Additional useful selectors
+export const selectHasActiveSearch = (
+  state: { pagination: PaginationSliceState },
+  section: keyof PaginationSliceState,
+): boolean => {
+  const sectionState = state.pagination[section];
+  return !!(
+    sectionState.searchQuery && sectionState.searchQuery.trim().length > 0
+  );
+};
+
+export const selectHasActiveFilters = (
+  state: { pagination: PaginationSliceState },
+  section: keyof PaginationSliceState,
+): boolean => {
+  const sectionState = state.pagination[section];
+  return !!(
+    sectionState.filters && Object.keys(sectionState.filters).length > 0
+  );
+};
+
+export const selectTotalActiveFilters = (
+  state: { pagination: PaginationSliceState },
+  section: keyof PaginationSliceState,
+): number => {
+  const sectionState = state.pagination[section];
+  let count = 0;
+
+  if (sectionState.searchQuery && sectionState.searchQuery.trim()) {
+    count++;
+  }
+
+  if (sectionState.filters) {
+    count += Object.keys(sectionState.filters).filter((key) => {
+      const value = sectionState.filters![key];
+      return value !== undefined && value !== null && value !== "";
+    }).length;
+  }
+
+  return count;
 };
 
 export default paginationSlice.reducer;
