@@ -31,7 +31,7 @@ api.interceptors.response.use(
     // Handle 401 - Unauthorized (e.g., logout user)
     if (error.response?.status === 401) {
       localStorage.removeItem("authToken");
-      window.location.href = "/login"; // Redirect to login
+      window.location.href = "/auth/login"; // Redirect to login
     }
     return Promise.reject(error);
   },

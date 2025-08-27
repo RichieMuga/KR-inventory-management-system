@@ -1,5 +1,5 @@
 import { db } from "@/db/connection";
-import { sql, eq, and, ne } from "drizzle-orm";
+import { sql, eq, and, ne, or, like } from "drizzle-orm";
 import {
   assets,
   assetMovement,
@@ -34,7 +34,19 @@ export type UniqueAssetFilters = {
   status?: "in_use" | "not_in_use" | "retired";
   locationId?: number;
   keeperPayrollNumber?: string;
+  search?: string; // Added search parameter
 };
+
+// Properly extend the inferred Asset type
+export interface AssetWithLocation extends Asset {
+  keeperName: string | null; // Add this computed field
+  location?: {
+    locationId: number;
+    regionName: string;
+    departmentName: string | null; // This can be null from the database
+    notes: string | null; // This can be null from the database
+  };
+}
 
 // === BUSINESS LOGIC LAYER ===
 class UniqueAssetBusinessLogic {
@@ -182,7 +194,10 @@ class UniqueAssetDataAccess {
    * Insert new unique asset
    */
   static async insertUniqueAsset(data: Partial<NewAsset>): Promise<Asset> {
-    const [asset] = await db.insert(assets).values(data).returning();
+    const [asset] = await db
+      .insert(assets)
+      .values(data as NewAsset)
+      .returning();
 
     return asset;
   }
@@ -206,7 +221,9 @@ class UniqueAssetDataAccess {
   /**
    * Delete unique asset and related records
    */
-  static async deleteUniqueAsset(assetId: number): Promise<Asset | null> {
+  static async deleteUniqueAsset(
+    assetId: number,
+  ): Promise<Partial<Asset> | null> {
     return await db.transaction(async (tx) => {
       // Clean up related records
       await tx.delete(assetMovement).where(eq(assetMovement.assetId, assetId));
@@ -250,16 +267,17 @@ class UniqueAssetDataAccess {
   }
 
   /**
-   * Get paginated unique assets with filters
+   * Get paginated unique assets with filters and location details
    */
   static async getPaginatedUniqueAssets(
     page: number,
     limit: number,
     filters?: UniqueAssetFilters,
-  ): Promise<{ data: Asset[]; total: number }> {
+  ): Promise<{ data: AssetWithLocation[]; total: number }> {
     const offset = (Math.max(page, 1) - 1) * Math.min(limit, 100);
     const conditions = [eq(assets.isBulk, false)];
 
+    // Add filters
     if (filters?.status) {
       conditions.push(eq(assets.individualStatus, filters.status));
     }
@@ -272,23 +290,115 @@ class UniqueAssetDataAccess {
       );
     }
 
+    // Add search conditions
+    if (filters?.search) {
+      const searchTerm = `%${filters.search.toLowerCase()}%`;
+      conditions.push(
+        or(
+          like(sql`LOWER(${assets.name})`, searchTerm),
+          like(sql`LOWER(${assets.serialNumber})`, searchTerm),
+          like(sql`LOWER(${assets.modelNumber})`, searchTerm),
+          like(sql`LOWER(${assets.keeperPayrollNumber})`, searchTerm),
+          like(sql`LOWER(${assets.notes})`, searchTerm),
+          // Also search by user names
+          like(sql`LOWER(${users.firstName})`, searchTerm),
+          like(sql`LOWER(${users.lastName})`, searchTerm),
+          // Search by location details
+          like(sql`LOWER(${locations.regionName})`, searchTerm),
+          like(sql`LOWER(${locations.departmentName})`, searchTerm),
+        ),
+      );
+    }
+
     const whereClause =
-      conditions.length > 1 ? and(...conditions) : conditions[0];
+      conditions.length > 1 ? and(...conditions) : conditions[0] || undefined;
 
-    const data = await db
-      .select()
+    // Fetch assets with location and user details using JOINs
+    const baseQuery = db
+      .select({
+        // Asset fields
+        assetId: assets.assetId,
+        name: assets.name,
+        keeperPayrollNumber: assets.keeperPayrollNumber,
+        locationId: assets.locationId,
+        serialNumber: assets.serialNumber,
+        isBulk: assets.isBulk,
+        individualStatus: assets.individualStatus,
+        bulkStatus: assets.bulkStatus,
+        currentStockLevel: assets.currentStockLevel,
+        minimumThreshold: assets.minimumThreshold,
+        lastRestocked: assets.lastRestocked,
+        modelNumber: assets.modelNumber,
+        notes: assets.notes,
+        createdAt: assets.createdAt,
+        updatedAt: assets.updatedAt,
+        // Location fields - updated to match your schema
+        locationRegionName: locations.regionName,
+        locationDepartmentName: locations.departmentName,
+        locationNotes: locations.notes,
+        // User fields
+        keeperFirstName: users.firstName,
+        keeperLastName: users.lastName,
+      })
       .from(assets)
-      .where(whereClause)
-      .limit(Math.min(limit, 100))
-      .offset(offset)
-      .orderBy(assets.createdAt);
+      .leftJoin(locations, eq(assets.locationId, locations.locationId))
+      .leftJoin(users, eq(assets.keeperPayrollNumber, users.payrollNumber));
 
-    const [{ count }] = await db
+    const data = whereClause
+      ? await baseQuery
+        .where(whereClause)
+        .limit(Math.min(limit, 100))
+        .offset(offset)
+        .orderBy(assets.createdAt)
+      : await baseQuery
+        .limit(Math.min(limit, 100))
+        .offset(offset)
+        .orderBy(assets.createdAt);
+
+    // Transform the data to include location object and keeper name
+    const transformedData: AssetWithLocation[] = data.map((row) => ({
+      assetId: row.assetId,
+      name: row.name,
+      keeperPayrollNumber: row.keeperPayrollNumber,
+      locationId: row.locationId,
+      serialNumber: row.serialNumber,
+      isBulk: row.isBulk,
+      individualStatus: row.individualStatus,
+      bulkStatus: row.bulkStatus,
+      currentStockLevel: row.currentStockLevel,
+      minimumThreshold: row.minimumThreshold,
+      lastRestocked: row.lastRestocked,
+      modelNumber: row.modelNumber,
+      notes: row.notes,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      // Add keeper name field
+      keeperName:
+        row.keeperFirstName && row.keeperLastName
+          ? `${row.keeperFirstName} ${row.keeperLastName}`
+          : null,
+      location: row.locationRegionName
+        ? {
+          locationId: row.locationId,
+          regionName: row.locationRegionName,
+          departmentName: row.locationDepartmentName,
+          notes: row.locationNotes,
+        }
+        : undefined,
+    }));
+
+    // Get total count with same filters and joins
+    const baseCountQuery = db
       .select({ count: sql<number>`count(*)` })
       .from(assets)
-      .where(whereClause);
+      .leftJoin(locations, eq(assets.locationId, locations.locationId))
+      .leftJoin(users, eq(assets.keeperPayrollNumber, users.payrollNumber));
 
-    return { data, total: count };
+    const [{ count }] = whereClause
+      ? await baseCountQuery.where(whereClause)
+      : await baseCountQuery;
+
+    return { data: transformedData, total: count };
   }
 }
 
@@ -357,27 +467,18 @@ export class UniqueAssetService {
   }
 
   /**
-   * Get all unique assets with pagination and filtering
+   * Get paginated unique assets with filters, location details, and user information
    */
-  static async getAllUniqueAssets(
-    page = 1,
-    limit = 10,
+  static async getPaginatedUniqueAssets(
+    page: number,
+    limit: number,
     filters?: UniqueAssetFilters,
-  ) {
-    const { data, total } =
-      await UniqueAssetDataAccess.getPaginatedUniqueAssets(
-        page,
-        limit,
-        filters,
-      );
-
-    return {
-      page: Math.max(page, 1),
-      limit: Math.min(limit, 100),
-      total,
-      totalPages: Math.ceil(total / Math.min(limit, 100)),
-      data,
-    };
+  ): Promise<{ data: AssetWithLocation[]; total: number }> {
+    return await UniqueAssetDataAccess.getPaginatedUniqueAssets(
+      page,
+      limit,
+      filters,
+    );
   }
 
   /**
@@ -463,7 +564,9 @@ export class UniqueAssetService {
   /**
    * Delete unique asset
    */
-  static async deleteUniqueAsset(assetId: number): Promise<Asset | null> {
+  static async deleteUniqueAsset(
+    assetId: number,
+  ): Promise<Partial<Asset> | null> {
     const asset = await UniqueAssetDataAccess.getUniqueAssetById(assetId);
     if (!asset) {
       throw new Error("Unique asset not found");
