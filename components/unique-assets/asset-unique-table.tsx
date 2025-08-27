@@ -32,7 +32,7 @@ interface AssetTableProps {
     region: string;
     availability: "Available" | "Assigned" | "In Repair" | "Disposed";
     location: string;
-    keeper: string;
+    keeperName: string | undefined;
     isBulk: boolean;
     quantity?: number;
   }[];
@@ -40,7 +40,7 @@ interface AssetTableProps {
 
 export function AssetTable({ assets }: AssetTableProps) {
   const router = useRouter();
-
+  console.log(assets)
   const handleViewAsset = (assetId: string) => {
     router.push(`/viewAsset/${assetId}`);
   };
@@ -75,7 +75,7 @@ export function AssetTable({ assets }: AssetTableProps) {
               <TableCell>{asset.serialNumber}</TableCell>
               <TableCell>{asset.location}</TableCell>
               <TableCell>{asset.region}</TableCell>
-              <TableCell>{asset.keeper}</TableCell>
+              <TableCell>{asset.keeperName}</TableCell>
               <TableCell className="text-center">
                 <TooltipProvider>
                   <div className="flex items-center justify-center gap-2">
