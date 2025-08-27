@@ -117,34 +117,47 @@ export const GET = withAuth(async (req: NextRequest) => {
       parseInt(searchParams.get("limit") || "10", 10),
       100,
     );
-
+    // Add search parameter
+    const search = searchParams.get("search");
     const filters: {
       status?: "in_use" | "not_in_use" | "retired";
       locationId?: number;
       keeperPayrollNumber?: string;
+      search?: string;
     } = {};
-
     const status = searchParams.get("status");
     if (status && ["in_use", "not_in_use", "retired"].includes(status)) {
       filters.status = status as "in_use" | "not_in_use" | "retired";
     }
-
     const locationId = searchParams.get("locationId");
     if (locationId) {
       const id = parseInt(locationId, 10);
       if (!isNaN(id)) filters.locationId = id;
     }
-
     const keeperPayrollNumber = searchParams.get("keeperPayrollNumber");
     if (keeperPayrollNumber) {
       filters.keeperPayrollNumber = keeperPayrollNumber;
     }
+    if (search) {
+      filters.search = search;
+    }
 
-    const result = await UniqueAssetService.getAllUniqueAssets(
-      page,
-      limit,
-      filters,
-    );
+    // Updated to call the service layer method that formats the response
+    const { data, total } =
+      await UniqueAssetService.getPaginatedUniqueAssets(
+        page,
+        limit,
+        filters,
+      );
+
+    const result = {
+      page: Math.max(page, 1),
+      limit: Math.min(limit, 100),
+      total,
+      totalPages: Math.ceil(total / Math.min(limit, 100)),
+      data,
+    };
+
     return NextResponse.json(result, { status: 200 });
   } catch (error: any) {
     console.error("Error fetching unique assets:", error);
