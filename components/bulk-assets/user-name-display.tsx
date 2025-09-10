@@ -1,6 +1,6 @@
 "use client";
 
-import { useUser } from "@/hooks/asset-queries";
+import { useUser } from "@/hooks/bulk-asset-queries";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
