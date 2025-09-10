@@ -31,6 +31,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { UserNameDisplay } from "./user-name-display";
 
 interface AssetTableProps {
   assets: {
@@ -105,7 +106,15 @@ export function AssetTable({
               <TableCell>{asset.serialNumber}</TableCell>
               <TableCell>{asset.location}</TableCell>
               <TableCell>{asset.region}</TableCell>
-              <TableCell>{asset.keeper}</TableCell>
+              <TableCell>
+                {" "}
+                <UserNameDisplay
+                  payrollNumber={asset.keeper} // Since keeper contains the payroll number
+                  maxLength={20}
+                  fallback="Unassigned"
+                  className="text-sm"
+                />
+              </TableCell>
               <TableCell>
                 <div className="flex gap-2">
                   {asset.isBulk && isLowQuantity(asset) && (

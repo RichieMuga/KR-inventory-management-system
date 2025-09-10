@@ -2,19 +2,54 @@
 
 import type React from "react";
 import { useDispatch, useSelector } from "react-redux";
-
+import { useQuery, useQueries } from "@tanstack/react-query";
 import { useState, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-// DO NOTE: THIS IS FROM THE SAME FOLDER, PLEASE REMEMBER
 import { AssetCard } from "./asset-bulk-card";
 import { AssetTable } from "./asset-bulk-table";
-import { Search, PlusCircle } from "lucide-react";
+import { Search, PlusCircle, Loader2 } from "lucide-react";
 import { RootState } from "@/lib/store";
 import BulkAssetModal from "@/components/modals/bulk-asset-modal";
 import Pagination from "@/components/pagination/pagination";
 import { toggleBulkModal } from "@/lib/features/modals/asset-modal-buttons";
+import { api } from "@/lib/api/axiosInterceptor";
 
+// Location data interface
+interface LocationData {
+  locationId: number;
+  regionName: string;
+  departmentName: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface LocationResponse {
+  success: boolean;
+  data: LocationData;
+}
+
+// API response interface
+interface ApiAsset {
+  assetId: number;
+  name: string;
+  keeperPayrollNumber: string;
+  locationId: number;
+  serialNumber: string | null;
+  isBulk: boolean;
+  individualStatus: string | null;
+  bulkStatus: string;
+  currentStockLevel: number;
+  minimumThreshold: number;
+  lastRestocked: string;
+  modelNumber: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Enhanced legacy interface with location details
 interface Asset {
   id: string;
   name: string;
@@ -25,128 +60,41 @@ interface Asset {
   keeper: string;
   isBulk: boolean;
   quantity?: number;
+  locationId?: number;
 }
 
-const MOCK_ASSETS: Asset[] = [
-  {
-    id: "1",
-    name: "HP Toner Cartridge (Black)",
-    serialNumber: "HP-TNR-BLK-001",
-    region: "Nairobi",
-    availability: "Available",
-    location: "IT Store Room A",
-    keeper: "John Doe",
-    isBulk: true,
-    quantity: 25,
-  },
-  {
-    id: "2",
-    name: "Samsung TV Remote",
-    serialNumber: "SAMS-REM-TV-002",
-    region: "Mombasa",
-    availability: "Assigned",
-    location: "Conference Room 3",
-    keeper: "Jane Smith",
-    isBulk: true,
-    quantity: 25,
-  },
-  {
-    id: "3",
-    name: "Epson Ink Cartridge (Cyan)",
-    serialNumber: "EPS-INK-CYN-003",
-    region: "Kisumu",
-    availability: "Available",
-    location: "IT Store Room B",
-    keeper: "Peter Jones",
-    isBulk: true,
-    quantity: 15,
-  },
-  {
-    id: "4",
-    name: "Network Cable (CAT6, 10m)",
-    serialNumber: "NET-CAB-CAT6-004",
-    region: "Nairobi",
-    availability: "Available",
-    location: "Server Room 1",
-    keeper: "Alice Brown",
-    isBulk: true,
-    quantity: 50,
-  },
-  {
-    id: "5",
-    name: "USB Flash Drive (64GB)",
-    serialNumber: "USB-FLSH-64GB-005",
-    region: "Mombasa",
-    availability: "Assigned",
-    location: "User Desk 101",
-    keeper: "David Green",
-    isBulk: true,
-    quantity: 25,
-  },
-  {
-    id: "6",
-    name: "Wireless Mouse (Logitech)",
-    serialNumber: "WL-MSE-LOGI-006",
-    region: "Kisumu",
-    availability: "Available",
-    location: "IT Store Room A",
-    keeper: "Sarah White",
-    isBulk: true,
-    quantity: 10,
-  },
-  {
-    id: "7",
-    name: "Standard Keyboard",
-    serialNumber: "STD-KEY-007",
-    region: "Nairobi",
-    availability: "Available",
-    location: "IT Store Room B",
-    keeper: "Michael Black",
-    isBulk: true,
-    quantity: 20,
-  },
-  {
-    id: "8",
-    name: "24-inch Dell Monitor",
-    serialNumber: "MON-DELL-24-008",
-    region: "Mombasa",
-    availability: "In Repair",
-    location: "Repair Workshop",
-    keeper: "Emily Davis",
-    isBulk: true,
-    quantity: 25,
-  },
-  {
-    id: "9",
-    name: "Projector (Epson)",
-    serialNumber: "PROJ-EPS-009",
-    region: "Kisumu",
-    availability: "Assigned",
-    location: "Training Room",
-    keeper: "Chris Wilson",
-    isBulk: true,
-    quantity: 25,
-  },
-  {
-    id: "10",
-    name: "Server Rack Unit (42U)",
-    serialNumber: "SRV-RACK-42U-010",
-    region: "Nairobi",
-    availability: "Available",
-    location: "Server Room 2",
-    keeper: "Olivia Taylor",
-    isBulk: true,
-    quantity: 25,
-  },
-];
+interface ApiResponse {
+  page: number;
+  limit: number;
+  total: string;
+  totalPages: number;
+  data: ApiAsset[];
+}
+
+// Function to fetch location details
+const fetchLocationDetails = async (
+  locationId: number,
+): Promise<LocationData> => {
+  const response = await api.get(`/locations/${locationId}`);
+  return response.data.data;
+};
+
+// Function to fetch assets
+const fetchAssets = async (
+  page: number = 1,
+  limit: number = 10,
+): Promise<ApiResponse> => {
+  const response = await api.get(`/?page=${page}&limit=${limit}`);
+  return response.data;
+};
 
 export function AssetListView() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [displaySearchTerm, setDisplaySearchTerm] = useState(""); // For input field
+  const [displaySearchTerm, setDisplaySearchTerm] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10); // You can make this configurable if needed
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  const allAssets = useMemo(() => MOCK_ASSETS, []); // Memoize the full list
 
   const dispatch = useDispatch();
 
@@ -154,22 +102,110 @@ export function AssetListView() {
     (state: RootState) => state.assetModal,
   );
 
+  // React Query to fetch assets with pagination
+  const {
+    data: assetsResponse,
+    isLoading: isLoadingAssets,
+    error: assetsError,
+    refetch: refetchAssets,
+  } = useQuery({
+    queryKey: ["assets", currentPage, itemsPerPage],
+    queryFn: () => fetchAssets(currentPage, itemsPerPage),
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+
+  // Get unique location IDs from assets
+  const locationIds = useMemo(() => {
+    if (!assetsResponse?.data) return [];
+    const ids = [
+      ...new Set(assetsResponse.data.map((asset) => asset.locationId)),
+    ];
+    return ids;
+  }, [assetsResponse]);
+
+  // Use useQueries to fetch all location details in parallel
+  const locationQueries = useQueries({
+    queries: locationIds.map((locationId) => ({
+      queryKey: ["location", locationId],
+      queryFn: () => fetchLocationDetails(locationId),
+      staleTime: 10 * 60 * 1000, // 10 minutes - locations change less frequently
+      retry: 2,
+    })),
+  });
+
+  // Check if all location queries are loaded
+  const isLoadingLocations = locationQueries.some((query) => query.isLoading);
+  const locationErrors = locationQueries.filter((query) => query.error);
+
+  // Create a map of locationId to location data for quick lookup
+  const locationMap = useMemo(() => {
+    const map = new Map<number, LocationData>();
+    locationQueries.forEach((query, index) => {
+      if (query.data) {
+        map.set(locationIds[index], query.data);
+      }
+    });
+    return map;
+  }, [locationQueries, locationIds]);
+
+  // Transform assets with location data
+  const transformedAssets = useMemo(() => {
+    if (!assetsResponse?.data || isLoadingLocations) return [];
+
+    const mapBulkStatusToAvailability = (
+      bulkStatus: string,
+    ): "Available" | "Assigned" | "In Repair" | "Disposed" => {
+      switch (bulkStatus.toLowerCase()) {
+        case "active":
+          return "Available";
+        case "assigned":
+          return "Assigned";
+        case "repair":
+        case "in_repair":
+          return "In Repair";
+        case "disposed":
+          return "Disposed";
+        default:
+          return "Available";
+      }
+    };
+
+    return assetsResponse.data.map((apiAsset): Asset => {
+      const locationData = locationMap.get(apiAsset.locationId);
+
+      return {
+        id: apiAsset.assetId.toString(),
+        name: apiAsset.name,
+        serialNumber: apiAsset.serialNumber || apiAsset.modelNumber,
+        region: locationData?.regionName || `Location ${apiAsset.locationId}`,
+        availability: mapBulkStatusToAvailability(apiAsset.bulkStatus),
+        location:
+          locationData?.departmentName || `Location ${apiAsset.locationId}`,
+        keeper: apiAsset.keeperPayrollNumber,
+        isBulk: apiAsset.isBulk,
+        quantity: apiAsset.currentStockLevel,
+        locationId: apiAsset.locationId,
+      };
+    });
+  }, [assetsResponse, locationMap, isLoadingLocations]);
+
   const suggestions = useMemo(() => {
     if (!displaySearchTerm) return [];
     const lowerCaseSearchTerm = displaySearchTerm.toLowerCase();
-    return allAssets.filter(
+    return transformedAssets.filter(
       (asset) =>
         asset.name.toLowerCase().includes(lowerCaseSearchTerm) ||
         asset.serialNumber.toLowerCase().includes(lowerCaseSearchTerm),
     );
-  }, [displaySearchTerm, allAssets]);
+  }, [displaySearchTerm, transformedAssets]);
 
   const filteredAssets = useMemo(() => {
     if (!searchTerm) {
-      return allAssets;
+      return transformedAssets;
     }
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    return allAssets.filter(
+    return transformedAssets.filter(
       (asset) =>
         asset.name.toLowerCase().includes(lowerCaseSearchTerm) ||
         asset.serialNumber.toLowerCase().includes(lowerCaseSearchTerm) ||
@@ -178,22 +214,25 @@ export function AssetListView() {
         asset.keeper.toLowerCase().includes(lowerCaseSearchTerm) ||
         asset.availability.toLowerCase().includes(lowerCaseSearchTerm),
     );
-  }, [searchTerm, allAssets]);
+  }, [searchTerm, transformedAssets]);
 
   const handleSearch = () => {
     setSearchTerm(displaySearchTerm);
     setShowSuggestions(false);
+    // Reset to first page when searching
+    setCurrentPage(1);
   };
 
   const handleSuggestionClick = (suggestion: Asset) => {
-    setDisplaySearchTerm(suggestion.name); // Or suggestion.serialNumber
-    setSearchTerm(suggestion.name); // Immediately search for the selected suggestion
+    setDisplaySearchTerm(suggestion.name);
+    setSearchTerm(suggestion.name);
     setShowSuggestions(false);
+    setCurrentPage(1);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDisplaySearchTerm(e.target.value);
-    setShowSuggestions(true); // Show suggestions as user types
+    setShowSuggestions(true);
   };
 
   const handleInputFocus = () => {
@@ -203,7 +242,6 @@ export function AssetListView() {
   };
 
   const handleInputBlur = () => {
-    // Delay hiding suggestions to allow click on suggestion item
     setTimeout(() => {
       setShowSuggestions(false);
     }, 100);
@@ -212,6 +250,67 @@ export function AssetListView() {
   const handleToggleBulkAssetModal = () => {
     dispatch(toggleBulkModal());
   };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to top when page changes
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Loading state
+  if (isLoadingAssets || isLoadingLocations) {
+    return (
+      <div className="flex flex-col gap-4 p-4 md:p-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <h1 className="text-2xl font-bold text-kr-maroon-dark">
+            Bulk Asset Inventory
+          </h1>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-6 w-6 animate-spin text-kr-maroon" />
+            <span className="text-muted-foreground">
+              {isLoadingAssets
+                ? "Loading assets..."
+                : "Loading location details..."}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (assetsError || locationErrors.length > 0) {
+    return (
+      <div className="flex flex-col gap-4 p-4 md:p-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <h1 className="text-2xl font-bold text-kr-maroon-dark">
+            Bulk Asset Inventory
+          </h1>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-red-600 mb-4">
+              {assetsError
+                ? `Error loading assets: ${assetsError instanceof Error ? assetsError.message : "Unknown error"}`
+                : `Error loading location details: ${locationErrors.length} location(s) failed to load`}
+            </p>
+            <Button
+              onClick={() => {
+                refetchAssets();
+                locationQueries.forEach((query) => query.refetch());
+              }}
+              variant="outline"
+              className="border-kr-maroon text-kr-maroon hover:bg-kr-maroon hover:text-white"
+            >
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
@@ -223,7 +322,7 @@ export function AssetListView() {
           <Input
             type="search"
             placeholder="Search assets by name or serial..."
-            className="flex-1 pr-10" // Add padding for the button
+            className="flex-1 pr-10"
             value={displaySearchTerm}
             onChange={handleInputChange}
             onFocus={handleInputFocus}
@@ -250,7 +349,7 @@ export function AssetListView() {
                 <div
                   key={asset.id}
                   className="px-4 py-2 cursor-pointer hover:bg-gray-100 text-sm"
-                  onMouseDown={() => handleSuggestionClick(asset)} // Use onMouseDown to prevent blur
+                  onMouseDown={() => handleSuggestionClick(asset)}
                 >
                   <span className="font-medium">{asset.name}</span>
                   <span className="text-muted-foreground ml-2">
@@ -270,6 +369,21 @@ export function AssetListView() {
         </Button>
       </div>
 
+      {/* Display pagination info and total assets count */}
+      {assetsResponse && (
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-sm text-muted-foreground">
+          <div>Total Assets: {assetsResponse.total}</div>
+          <div>
+            Showing {(currentPage - 1) * itemsPerPage + 1} -{" "}
+            {Math.min(
+              currentPage * itemsPerPage,
+              parseInt(assetsResponse.total),
+            )}{" "}
+            of {assetsResponse.total} assets
+          </div>
+        </div>
+      )}
+
       {/* Mobile View: Cards */}
       <div className="grid gap-4 md:hidden">
         {filteredAssets.length > 0 ? (
@@ -277,7 +391,7 @@ export function AssetListView() {
             <AssetCard key={asset.id} asset={asset} />
           ))
         ) : (
-          <p className="text-center text-muted-foreground">
+          <p className="text-center text-muted-foreground py-8">
             No assets found matching your search.
           </p>
         )}
@@ -288,13 +402,22 @@ export function AssetListView() {
         {filteredAssets.length > 0 ? (
           <AssetTable assets={filteredAssets} />
         ) : (
-          <p className="text-center text-muted-foreground">
+          <p className="text-center text-muted-foreground py-8">
             No assets found matching your search.
           </p>
         )}
       </div>
+
+      {/* Pagination - only show if there are multiple pages and no search is active */}
+      {assetsResponse && assetsResponse.totalPages > 1 && !searchTerm && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={assetsResponse.totalPages}
+          onPageChange={handlePageChange}
+        />
+      )}
+
       {isBulkAssetModalOpen && <BulkAssetModal />}
-      <Pagination />
     </div>
   );
 }

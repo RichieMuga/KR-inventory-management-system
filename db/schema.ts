@@ -83,7 +83,7 @@ export const locations = pgTable("locations", {
  * - Bulk assets: use `currentStockLevel`, `bulkStatus`, `minimumThreshold`
  */
 
-// Updated constraint in your schema.ts
+// Assets
 export const assets = pgTable(
   "assets",
   {

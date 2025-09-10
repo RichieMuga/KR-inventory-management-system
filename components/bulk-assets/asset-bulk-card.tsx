@@ -19,6 +19,8 @@ import {
   Edit,
   Trash2,
   AlertTriangle,
+  Calendar,
+  Hash,
 } from "lucide-react";
 import {
   Tooltip,
@@ -26,7 +28,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { UserNameDisplay } from "./user-name-display";
 
+// Update your AssetCardProps interface
 interface AssetCardProps {
   asset: {
     id: string;
@@ -38,8 +42,10 @@ interface AssetCardProps {
     keeper: string;
     isBulk: boolean;
     quantity?: number;
+    locationId?: number;
+    // Add any other properties you need for the card
   };
-  lowQuantityThreshold?: number; // Optional prop to define what's considered "low"
+  lowQuantityThreshold?: number;
 }
 
 export function AssetCard({
@@ -48,11 +54,32 @@ export function AssetCard({
 }: AssetCardProps) {
   const router = useRouter();
 
-  // Determine if quantity is low
+  // Determine if quantity is low for bulk assets
   const isLowQuantity =
     asset.isBulk &&
     asset.quantity !== undefined &&
     asset.quantity <= lowQuantityThreshold;
+
+  // Format status for display
+  const getStatusBadge = () => {
+    const statusColors = {
+      Available: "bg-green-100 text-green-800",
+      Assigned: "bg-blue-100 text-blue-800",
+      "In Repair": "bg-yellow-100 text-yellow-800",
+      Disposed: "bg-red-100 text-red-800",
+    };
+
+    return (
+      <Badge
+        className={
+          statusColors[asset.availability as keyof typeof statusColors] ||
+          "bg-gray-100 text-gray-800"
+        }
+      >
+        {asset.availability}
+      </Badge>
+    );
+  };
 
   const handleViewAsset = () => {
     router.push(`/view-bulk-asset/${asset.id}`);
@@ -63,64 +90,82 @@ export function AssetCard({
   };
 
   const handleDeleteAsset = () => {
+    // TODO: Implement delete confirmation dialog
     console.log("Delete asset:", asset.id);
-    // TODO: Implement delete asset functionality
-    // You might want to show a confirmation dialog before deleting
   };
 
   return (
     <Card className="w-full shadow-sm hover:shadow-md transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-lg font-semibold text-kr-maroon-dark">
-          {asset.name}
-        </CardTitle>
-        <div className="flex gap-2">
-          {asset.isBulk && isLowQuantity && (
-            <Badge className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" />
-              Low Stock
-            </Badge>
-          )}
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+        <div className="flex-1">
+          <CardTitle className="text-lg font-semibold text-kr-maroon-dark mb-2">
+            {asset.name}
+          </CardTitle>
+          <div className="flex flex-wrap gap-2">
+            {getStatusBadge()}
+            {asset.isBulk && (
+              <Badge variant="outline" className="text-xs">
+                Bulk Asset
+              </Badge>
+            )}
+            {asset.isBulk && isLowQuantity && (
+              <Badge className="bg-red-100 text-red-800 text-xs flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Low Stock
+              </Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-2 text-sm">
-        <div className="flex items-center gap-2">
-          <Tag className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Serial:</span>{" "}
-          {asset.serialNumber}
-        </div>
-        <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Location:</span>{" "}
-          {asset.location}, {asset.region}
-        </div>
-        <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">
-            Keeper/Responsibility:
-          </span>{" "}
-          {asset.keeper}
-        </div>
-        {asset.isBulk && (
+
+      <CardContent className="grid gap-3 text-sm">
+        {/* Serial Number */}
+        {asset.serialNumber && (
           <div className="flex items-center gap-2">
-            <Package className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">Quantity:</span>{" "}
+            <Tag className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            <span className="text-muted-foreground">Serial:</span>
+            <span className="font-mono text-xs">{asset.serialNumber}</span>
+          </div>
+        )}
+
+        {/* Location - Only show department name, not region */}
+        <div className="flex items-center gap-2">
+          <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <span className="text-muted-foreground">Location:</span>
+          <span>{asset.location}</span>
+        </div>
+
+        {/* Keeper */}
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <span className="text-muted-foreground">Keeper:</span>
+          <UserNameDisplay
+            payrollNumber={asset.keeper}
+            maxLength={25}
+            fallback="Unassigned"
+            className="text-sm"
+          />
+        </div>
+
+        {/* Bulk Asset Specific Information */}
+        {asset.isBulk && asset.quantity !== undefined && (
+          <div className="flex items-center gap-2">
+            <Package className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            <span className="text-muted-foreground">Stock Level:</span>
             <span
               className={
-                isLowQuantity ? "text-red-600 font-semibold" : "text-gray-900"
+                isLowQuantity
+                  ? "text-red-600 font-semibold"
+                  : "text-gray-900 font-medium"
               }
             >
               {asset.quantity}
             </span>
-            {isLowQuantity && (
-              <span className="text-red-600 text-xs font-medium">
-                (Low Stock)
-              </span>
-            )}
           </div>
         )}
       </CardContent>
-      <CardFooter className="flex gap-2 pt-4">
+
+      <CardFooter className="flex gap-2 pt-4 border-t">
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -138,6 +183,7 @@ export function AssetCard({
               <p>View detailed asset information</p>
             </TooltipContent>
           </Tooltip>
+
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -154,6 +200,7 @@ export function AssetCard({
               <p>Edit asset information and details</p>
             </TooltipContent>
           </Tooltip>
+
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
