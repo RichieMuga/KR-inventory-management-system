@@ -54,6 +54,61 @@ export interface AssignmentWithDetails {
   dateReturned: Date | null;
   conditionReturned: string | null;
   locationName: string;
+  individualStatus: "in_use" | "not_in_use" | "retired" | null;
+}
+
+// ✅ NEW: Type definition for the comprehensive assignment response
+interface AssignmentDetailsResponse {
+  // Assignment Details
+  assignmentId: number;
+  dateIssued: Date;
+  conditionIssued: string;
+  quantity: number;
+  notes: string | null;
+
+  // Asset Details
+  asset: {
+    assetId: number;
+    name: string;
+    serialNumber: string | null;
+    isBulk: boolean;
+    individualStatus: "in_use" | "not_in_use" | "retired" | null;
+    currentLocation: {
+      locationId: number;
+      departmentName: string;
+      regionName: string;
+      locationName: string;
+    };
+  };
+
+  // Assignment Parties
+  assignedTo: {
+    payrollNumber: string;
+    fullName: string;
+    firstName: string;
+    lastName: string;
+  };
+  assignedBy: {
+    payrollNumber: string;
+    fullName: string;
+    firstName: string;
+    lastName: string;
+  };
+
+  // Current Assignment Status
+  status: {
+    isCurrentlyAssigned: boolean;
+    isInUse: boolean | null; // null for bulk assets
+    dateReturned: Date | null;
+    conditionReturned: string | null;
+    quantityReturned: number;
+    quantityRemaining: number;
+  };
+
+  // Movement Details
+  locationChanged: boolean;
+  previousLocationId: number;
+  newLocationId: number;
 }
 
 export class AssetAssignmentService {
@@ -63,7 +118,12 @@ export class AssetAssignmentService {
 
   static async createAssignment(
     data: CreateAssignmentData,
-  ): Promise<{ success: boolean; assignmentId?: number; message: string }> {
+  ): Promise<{
+    success: boolean;
+    assignmentId?: number;
+    assignmentDetails?: AssignmentDetailsResponse;
+    message: string;
+  }> {
     try {
       // Get asset details with current location
       const asset = await db
@@ -111,6 +171,21 @@ export class AssetAssignmentService {
 
       const userDetails = user[0];
 
+      // Get assignedBy user details
+      const [assignedByUser] = await db
+        .select({
+          payrollNumber: users.payrollNumber,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        })
+        .from(users)
+        .where(eq(users.payrollNumber, data.assignedBy))
+        .limit(1);
+
+      if (!assignedByUser) {
+        return { success: false, message: "Assigning user not found" };
+      }
+
       // Determine target location for the asset
       const targetLocationId =
         data.forceLocationId || // Manual override
@@ -134,20 +209,40 @@ export class AssetAssignmentService {
           };
         }
 
-        // Check if already assigned (no return date)
+        // Check if asset is already in use by status
+        if (assetDetails.individualStatus === "in_use") {
+          return {
+            success: false,
+            message: "Asset is already in use and cannot be assigned",
+          };
+        }
+
+        // Check if asset is retired
+        if (assetDetails.individualStatus === "retired") {
+          return {
+            success: false,
+            message: "Retired assets cannot be assigned",
+          };
+        }
+
+        // Double-check for existing active assignments (safety net)
         const existingAssignment = await db
           .select({ assignmentId: assetAssignment.assignmentId })
           .from(assetAssignment)
           .where(
             and(
               eq(assetAssignment.assetId, data.assetId),
-              isNull(assetAssignment.dateReturned), // isNull is now properly imported
+              isNull(assetAssignment.dateReturned),
             ),
           )
           .limit(1);
 
         if (existingAssignment.length > 0) {
-          return { success: false, message: "Asset is already assigned" };
+          return {
+            success: false,
+            message:
+              "Asset has an active assignment that must be returned first",
+          };
         }
       } else {
         // Bulk asset stock validation
@@ -158,7 +253,7 @@ export class AssetAssignmentService {
           return { success: false, message: "Insufficient stock available" };
         }
 
-        // Update stock level
+        // Update stock level for bulk assets
         await db
           .update(assets)
           .set({
@@ -168,7 +263,7 @@ export class AssetAssignmentService {
           .where(eq(assets.assetId, data.assetId));
       }
 
-      // Create the assignment - FIXED: Use proper type for conditionIssued
+      // Create the assignment
       const [newAssignment] = await db
         .insert(assetAssignment)
         .values({
@@ -184,19 +279,26 @@ export class AssetAssignmentService {
           notes: data.notes,
           quantity: data.quantity,
         })
-        .returning({ assignmentId: assetAssignment.assignmentId });
+        .returning({
+          assignmentId: assetAssignment.assignmentId,
+          dateIssued: assetAssignment.dateIssued,
+        });
 
-      // Update asset location and keeper
+      // Update asset with proper enum value and conditional logic
+      const assetUpdateData: any = {
+        locationId: targetLocationId,
+        keeperPayrollNumber: data.assignedTo, // Person becomes responsible
+        updatedAt: new Date(),
+      };
+
+      // Only update individualStatus for unique assets
+      if (!assetDetails.isBulk) {
+        assetUpdateData.individualStatus = "in_use";
+      }
+
       await db
         .update(assets)
-        .set({
-          locationId: targetLocationId,
-          keeperPayrollNumber: data.assignedTo, // Person becomes responsible
-          individualStatus: !assetDetails.isBulk
-            ? "in_use"
-            : assetDetails.individualStatus,
-          updatedAt: new Date(),
-        })
+        .set(assetUpdateData)
         .where(eq(assets.assetId, data.assetId));
 
       // Create movement record if location changed
@@ -212,19 +314,88 @@ export class AssetAssignmentService {
         });
       }
 
+      // ✅ NEW: Get target location details for response
+      const [targetLocation] = await db
+        .select({
+          locationId: locations.locationId,
+          departmentName: locations.departmentName,
+          regionName: locations.regionName,
+        })
+        .from(locations)
+        .where(eq(locations.locationId, targetLocationId))
+        .limit(1);
+
+      // ✅ NEW: Build comprehensive assignment details response
+      const assignmentDetailsResponse: AssignmentDetailsResponse = {
+        // Assignment Details
+        assignmentId: newAssignment.assignmentId,
+        dateIssued: newAssignment.dateIssued,
+        conditionIssued: data.conditionIssued || "good",
+        quantity: data.quantity,
+        notes: data.notes || null,
+
+        // Asset Details
+        asset: {
+          assetId: assetDetails.assetId,
+          name: assetDetails.name,
+          serialNumber: assetDetails.serialNumber,
+          isBulk: assetDetails.isBulk,
+          individualStatus: !assetDetails.isBulk ? "in_use" : null, // Current status after assignment
+          currentLocation: {
+            locationId: targetLocation?.locationId || targetLocationId,
+            departmentName:
+              targetLocation?.departmentName || "Unknown Department",
+            regionName: targetLocation?.regionName || "Unknown Region",
+            locationName: `${targetLocation?.regionName || "Unknown Region"} - ${targetLocation?.departmentName || "Unknown Department"}`,
+          },
+        },
+
+        // Assignment Parties
+        assignedTo: {
+          payrollNumber: userDetails.payrollNumber,
+          fullName: `${userDetails.firstName} ${userDetails.lastName}`,
+          firstName: userDetails.firstName,
+          lastName: userDetails.lastName,
+        },
+        assignedBy: {
+          payrollNumber: assignedByUser.payrollNumber,
+          fullName: `${assignedByUser.firstName} ${assignedByUser.lastName}`,
+          firstName: assignedByUser.firstName,
+          lastName: assignedByUser.lastName,
+        },
+
+        // Current Assignment Status
+        status: {
+          isCurrentlyAssigned: true,
+          isInUse: !assetDetails.isBulk ? true : null, // Only relevant for unique assets
+          dateReturned: null,
+          conditionReturned: null,
+          quantityReturned: 0,
+          quantityRemaining: data.quantity,
+        },
+
+        // Movement Details (if location changed)
+        locationChanged: assetDetails.locationId !== targetLocationId,
+        previousLocationId: assetDetails.locationId,
+        newLocationId: targetLocationId,
+      };
+
       return {
         success: true,
         assignmentId: newAssignment.assignmentId,
-        message: `Asset assigned successfully to ${userDetails.firstName} ${userDetails.lastName}${assetDetails.locationId !== targetLocationId
+        assignmentDetails: assignmentDetailsResponse,
+        message: `Asset assigned successfully to ${userDetails.firstName} ${userDetails.lastName}${
+          assetDetails.locationId !== targetLocationId
             ? ` and moved to ${userDetails.defaultLocation?.departmentName}`
             : ""
-          }`,
+        }${!assetDetails.isBulk ? ". Asset status updated to 'in use'" : ""}`,
       };
     } catch (error) {
       console.error("Error creating assignment:", error);
       return { success: false, message: "Failed to create assignment" };
     }
   }
+
   /**
    * Get all unique asset assignments with filters
    */
@@ -294,6 +465,7 @@ export class AssetAssignmentService {
           assetName: assets.name,
           serialNumber: assets.serialNumber,
           isBulk: assets.isBulk,
+          individualStatus: assets.individualStatus,
           assignedTo: assetAssignment.assignedTo,
           assignedToName: sql<string>`${assignedToUser.firstName} || ' ' || ${assignedToUser.lastName}`,
           assignedBy: assetAssignment.assignedBy,
@@ -429,6 +601,7 @@ export class AssetAssignmentService {
           assetName: assets.name,
           serialNumber: assets.serialNumber,
           isBulk: assets.isBulk,
+          individualStatus: assets.individualStatus,
           assignedTo: assetAssignment.assignedTo,
           assignedToName: sql<string>`${assignedToUser.firstName} || ' ' || ${assignedToUser.lastName}`,
           assignedBy: assetAssignment.assignedBy,
@@ -505,7 +678,6 @@ export class AssetAssignmentService {
     try {
       const assignedToUser = alias(users, "assignedToUser");
       const assignedByUser = alias(users, "assignedByUser");
-
       const [assignment] = await db
         .select({
           assignmentId: assetAssignment.assignmentId,
@@ -513,6 +685,7 @@ export class AssetAssignmentService {
           assetName: assets.name,
           serialNumber: assets.serialNumber,
           isBulk: assets.isBulk,
+          individualStatus: assets.individualStatus, // ✅ Added this field
           assignedTo: assetAssignment.assignedTo,
           assignedToName: sql<string>`${assignedToUser.firstName} || ' ' || ${assignedToUser.lastName}`,
           assignedBy: assetAssignment.assignedBy,
@@ -559,7 +732,6 @@ export class AssetAssignmentService {
       return { success: false, message: "Failed to fetch assignment" };
     }
   }
-
   /**
    * Get available assets for assignment (not already assigned for unique, or have stock for bulk)
    */
