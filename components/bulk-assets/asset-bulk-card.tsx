@@ -19,8 +19,6 @@ import {
   Edit,
   Trash2,
   AlertTriangle,
-  Calendar,
-  Hash,
 } from "lucide-react";
 import {
   Tooltip,
@@ -28,7 +26,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { UserNameDisplay } from "./user-name-display";
+import { UserNameDisplay } from "@/components/bulk-assets/user-name-display";
 
 // Update your AssetCardProps interface
 interface AssetCardProps {
