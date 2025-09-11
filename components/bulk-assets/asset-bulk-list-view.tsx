@@ -10,7 +10,7 @@ import { AssetCard } from "./asset-bulk-card";
 import { AssetTable } from "./asset-bulk-table";
 import { Search, PlusCircle, Loader2 } from "lucide-react";
 import { RootState } from "@/lib/store";
-import BulkAssetModal from "@/components/modals/bulk-asset-modal";
+import BulkAssetModal from "@/components/modals/create-bulk-asset-modal";
 import Pagination from "@/components/pagination/pagination";
 import { toggleBulkModal } from "@/lib/features/modals/asset-modal-buttons";
 import { api } from "@/lib/api/axiosInterceptor";
