@@ -15,19 +15,35 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Assignment } from "@/types/assignment";
 
-interface AssignmentTableProps {
-  assignments: Assignment[];
-  onView: (assignment: Assignment) => void;
-  onDelete: (assignment: Assignment) => void;
+interface UniqueAssignment {
+  id: string;
+  assetName: string;
+  serialNumber: string;
+  assignedTo: string;
+  assignedBy: string;
+  dateIssued: string;
+  conditionIssued: string;
+  quantityIssued: number;
+  quantityRemaining: number;
+  status: string;
+  dateReturned: string | null;
+  conditionReturned: string | null;
+  locationName: string;
+  notes: string;
 }
 
-export default function AssignmentTable({
+interface Props {
+  assignments: UniqueAssignment[];
+  onView: (assignment: UniqueAssignment) => void;
+  onDelete: (assignment: UniqueAssignment) => void;
+}
+
+export default function UniqueAssetsTableDesktop({
   assignments,
   onView,
   onDelete,
-}: AssignmentTableProps) {
+}: Props) {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "In use":
@@ -54,7 +70,7 @@ export default function AssignmentTable({
   if (assignments.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
-        No assignments found for this category.
+        No unique asset assignments found.
       </div>
     );
   }
@@ -65,12 +81,12 @@ export default function AssignmentTable({
         <TableHeader className="bg-kr-maroon text-white">
           <TableRow className="text-white">
             <TableHead className="text-white">Asset Name</TableHead>
+            <TableHead className="text-white">Serial Number</TableHead>
             <TableHead className="text-white">Assigned To</TableHead>
             <TableHead className="text-white">Assigned By</TableHead>
             <TableHead className="text-white">Date Issued</TableHead>
             <TableHead className="text-white">Condition Issued</TableHead>
-            <TableHead className="text-white">Qty Issued</TableHead>
-            <TableHead className="text-white">Qty Remaining</TableHead>
+            <TableHead className="text-white">Location</TableHead>
             <TableHead className="text-white">Status</TableHead>
             <TableHead className="text-white">Date Returned</TableHead>
             <TableHead className="text-white">Condition Returned</TableHead>
@@ -80,16 +96,34 @@ export default function AssignmentTable({
         <TableBody>
           {assignments.map((assignment) => (
             <TableRow key={assignment.id}>
-              <TableCell>{assignment.assetName}</TableCell>
+              <TableCell className="font-medium">
+                {assignment.assetName}
+              </TableCell>
+              <TableCell className="font-mono text-sm">
+                {assignment.serialNumber}
+              </TableCell>
               <TableCell>{assignment.assignedTo}</TableCell>
               <TableCell>{assignment.assignedBy}</TableCell>
               <TableCell>{assignment.dateIssued}</TableCell>
-              <TableCell>{assignment.conditionIssued}</TableCell>
-              <TableCell>{assignment.quantityIssued}</TableCell>
-              <TableCell>{assignment.quantityRemaining}</TableCell>
+              <TableCell>
+                <Badge variant="outline" className="capitalize">
+                  {assignment.conditionIssued}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-sm">
+                {assignment.locationName}
+              </TableCell>
               <TableCell>{getStatusBadge(assignment.status)}</TableCell>
               <TableCell>{assignment.dateReturned || "-"}</TableCell>
-              <TableCell>{assignment.conditionReturned || "-"}</TableCell>
+              <TableCell>
+                {assignment.conditionReturned ? (
+                  <Badge variant="outline" className="capitalize">
+                    {assignment.conditionReturned}
+                  </Badge>
+                ) : (
+                  "-"
+                )}
+              </TableCell>
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

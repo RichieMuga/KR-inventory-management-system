@@ -1,29 +1,117 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Search } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Plus, Search, Loader2 } from "lucide-react";
+import axios from "axios";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import AssignmentTable from "@/components/assignment/assignment-table";
+import { formatDate } from "@/lib/utility/transformDate";
+
+// Import the dedicated table components
+import BulkAssetsTable from "@/components/assignment/bulk/bulk-assets-table";
+import UniqueAssetsResponsive from "@/components/assignment/unique/unique-assets-responsive";
+
 import ViewAssignmentDialog from "@/components/assignment/view-assignments";
 import NewAssignmentDialog from "@/components/assignment/new-assignment-dialogue";
 import DeleteConfirmationDialog from "@/components/assignment/delete-assignment-dialogue";
 import Pagination from "@/components/pagination/pagination";
 
-import { Assignment } from "@/types/assignment";
-import {
-  initialAssignments,
-  availableBulkAssets,
-  availableUniqueAssets,
-} from "@/lib/mockData/assignments";
+// Types
+interface Assignment {
+  assignmentId: number;
+  assetId: number;
+  assetName: string;
+  serialNumber: string;
+  isBulk: boolean;
+  individualStatus: "in_use" | "returned" | "not_in_use";
+  assignedTo: string;
+  assignedToName: string;
+  assignedBy: string;
+  assignedByName: string;
+  dateIssued: string;
+  conditionIssued: string;
+  notes: string;
+  quantity: number;
+  locationName: string;
+  quantityReturned: number;
+  quantityRemaining: number;
+  status: "active" | "inactive";
+  dateReturned: string | null;
+  conditionReturned: string | null;
+}
+
+interface AssignmentsResponse {
+  success: boolean;
+  data: Assignment[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalCount: string;
+    totalPages: number;
+  };
+}
+
+// API function to fetch assignments
+const fetchAssignments = async (
+  page: number = 1,
+  limit: number = 10,
+  type?: "bulk" | "unique",
+  searchQuery?: string,
+): Promise<AssignmentsResponse> => {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+  });
+
+  if (type) {
+    params.append("type", type);
+  }
+
+  if (searchQuery && searchQuery.trim()) {
+    params.append("search", `?q=${searchQuery.trim()}`);
+  }
+
+  const response = await axios.get(`api/assignments?${params.toString()}`);
+  return response.data;
+};
+
+// Transform API data to match your existing format
+const transformAssignment = (apiAssignment: Assignment) => ({
+  id: String(apiAssignment.assignmentId).padStart(3, "0"),
+  assetName: apiAssignment.assetName,
+  assetType: apiAssignment.isBulk ? "bulk" : ("unique" as "bulk" | "unique"),
+  serialNumber: apiAssignment.serialNumber,
+  assignedTo: apiAssignment.assignedToName,
+  assignedToId: apiAssignment.assignedTo,
+  assignedBy: apiAssignment.assignedByName,
+  assignedById: apiAssignment.assignedBy,
+  dateIssued: formatDate(apiAssignment.dateIssued),
+  conditionIssued: apiAssignment.conditionIssued,
+  locationName: apiAssignment.locationName,
+  status:
+    apiAssignment.individualStatus === "in_use"
+      ? "In use"
+      : apiAssignment.individualStatus === "returned"
+        ? "Returned"
+        : apiAssignment.status === "active"
+          ? "In use" // For bulk assignments without individualStatus
+          : "Not in use",
+  notes: apiAssignment.notes,
+  quantityIssued: apiAssignment.quantity,
+  quantityReturned: apiAssignment.quantityReturned,
+  quantityRemaining: apiAssignment.quantityRemaining,
+  dateReturned: formatDate(apiAssignment.dateReturned),
+  conditionReturned: apiAssignment.conditionReturned,
+  // Add batch number for bulk assignments (you may need to adjust this based on your data structure)
+  batchNumber:
+    apiAssignment.serialNumber || `BATCH-${apiAssignment.assignmentId}`,
+});
 
 export default function AssetAssignments() {
-  // Assignments data
-  const [assignments, setAssignments] =
-    useState<Assignment[]>(initialAssignments);
-
   // Tab state
   const [activeTab, setActiveTab] = useState<"bulk" | "unique">("bulk");
 
@@ -31,38 +119,78 @@ export default function AssetAssignments() {
   const [inputValue, setInputValue] = useState(""); // input field
   const [searchQuery, setSearchQuery] = useState(""); // actual filter
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
+
   // Dialog states
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedAssignment, setSelectedAssignment] =
-    useState<Assignment | null>(null);
+  const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
+
+  // React Query to fetch bulk assignments
+  const {
+    data: bulkAssignmentsData,
+    isLoading: bulkAssignmentsLoading,
+    isError: bulkAssignmentsError,
+    refetch: refetchBulkAssignments,
+  } = useQuery({
+    queryKey: ["bulkAssignments", currentPage, pageSize, searchQuery],
+    queryFn: () => fetchAssignments(currentPage, pageSize, "bulk", searchQuery),
+    enabled: activeTab === "bulk",
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2,
+  });
+
+  // React Query to fetch unique assignments
+  const {
+    data: uniqueAssignmentsData,
+    isLoading: uniqueAssignmentsLoading,
+    isError: uniqueAssignmentsError,
+    refetch: refetchUniqueAssignments,
+  } = useQuery({
+    queryKey: ["uniqueAssignments", currentPage, pageSize, searchQuery],
+    queryFn: () =>
+      fetchAssignments(currentPage, pageSize, "unique", searchQuery),
+    enabled: activeTab === "unique",
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2,
+  });
+
+  // Transform assignments from API
+  const bulkAssignments =
+    bulkAssignmentsData?.data?.map(transformAssignment) || [];
+
+  const uniqueAssignments =
+    uniqueAssignmentsData?.data?.map(transformAssignment) || [];
+
+  // Combined assignments for compatibility with existing code
+  const assignments = [...bulkAssignments, ...uniqueAssignments];
 
   // Reset search when switching tabs
   useEffect(() => {
     setInputValue("");
     setSearchQuery("");
+    setCurrentPage(1); // Reset pagination when switching tabs
   }, [activeTab]);
 
-  // Filtered assignments: by tab + searchQuery (only when button clicked)
-  const filteredAssignments = assignments
-    .filter((assignment) => {
-      if (activeTab === "bulk") return assignment.assetType === "bulk";
-      if (activeTab === "unique") return assignment.assetType === "unique";
-      return true;
-    })
-    .filter((assignment) => {
-      if (searchQuery) {
-        return assignment.assetName
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
-      }
-      return true;
-    });
+  // Reset page to 1 when search query changes
+  useEffect(() => {
+    if (searchQuery !== "") {
+      setCurrentPage(1);
+    }
+  }, [searchQuery]);
+
+  // Since we're now doing server-side search, we don't need client-side filtering
+  // Just use the data directly from the API
+  const filteredAssignments =
+    activeTab === "bulk" ? bulkAssignments : uniqueAssignments;
 
   // Handle search button click
   const handleSearch = () => {
     setSearchQuery(inputValue);
+    setCurrentPage(1); // Reset to first page when searching
   };
 
   // Handle Enter key
@@ -76,10 +204,11 @@ export default function AssetAssignments() {
   const handleClear = () => {
     setInputValue("");
     setSearchQuery("");
+    setCurrentPage(1); // Reset to first page when clearing search
   };
 
   // Dialog handlers
-  const handleView = (assignment: Assignment) => {
+  const handleView = (assignment: any) => {
     setSelectedAssignment(assignment);
     setViewDialogOpen(true);
   };
@@ -88,36 +217,72 @@ export default function AssetAssignments() {
     setAssignDialogOpen(true);
   };
 
-  const handleSaveAssignment = (newAssignment: Assignment) => {
-    setAssignments((prev) => [...prev, newAssignment]);
+  const handleSaveAssignment = (newAssignment: any) => {
+    // Refetch appropriate assignments after successful creation
+    if (newAssignment.assetType === "bulk") {
+      refetchBulkAssignments();
+    } else {
+      refetchUniqueAssignments();
+    }
   };
 
-  const handleDelete = (assignment: Assignment) => {
+  const handleDelete = (assignment: any) => {
     setSelectedAssignment(assignment);
     setDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (selectedAssignment) {
-      setAssignments((prev) =>
-        prev.filter((a) => a.id !== selectedAssignment.id),
-      );
-      setSelectedAssignment(null);
-    }
-  };
+      try {
+        // Extract assignmentId from the transformed ID format
+        const assignmentId =
+          selectedAssignment.id.toString().split("-")[1] ||
+          selectedAssignment.id.toString();
 
-  // Get available assets for new assignment dialog
-  const getAvailableAssets = () => {
-    return activeTab === "bulk" ? availableBulkAssets : availableUniqueAssets;
+        // Make API call to delete assignment
+        await axios.delete(`/api/assignments/${assignmentId}`);
+
+        // Refetch assignments after successful deletion
+        if (selectedAssignment.assetType === "bulk") {
+          refetchBulkAssignments();
+        } else {
+          refetchUniqueAssignments();
+        }
+
+        setSelectedAssignment(null);
+        setDeleteDialogOpen(false);
+      } catch (error) {
+        console.error("Error deleting assignment:", error);
+        // Handle error (show toast notification, etc.)
+      }
+    }
   };
 
   // Generate next assignment ID
   const getNextId = () => {
     const maxId = Math.max(
-      ...assignments.map((a) => parseInt(a.id.split("-")[1]) || 0),
+      ...assignments.map((a) => {
+        const idNum =
+          parseInt(a.id.toString().split("-")[1]) ||
+          parseInt(a.id.toString()) ||
+          0;
+        return idNum;
+      }),
       0,
     );
     return `ASG-${String(maxId + 1).padStart(3, "0")}`;
+  };
+
+  // Get placeholder text based on active tab
+  const getSearchPlaceholder = () => {
+    return activeTab === "bulk"
+      ? "Search by asset name, assignee, or batch..."
+      : "Search by asset name, serial, or assignee...";
+  };
+
+  // Handle pagination
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
   return (
@@ -144,7 +309,7 @@ export default function AssetAssignments() {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-sm border">
+        <div className="bg-white rounded-lg shadow-sm border mx-4">
           <Tabs
             value={activeTab}
             onValueChange={(v) => setActiveTab(v as "bulk" | "unique")}
@@ -155,93 +320,305 @@ export default function AssetAssignments() {
                   value="bulk"
                   className="data-[state=active]:bg-kr-maroon data-[state=active]:text-white"
                 >
-                  Bulk Assets (
-                  {assignments.filter((a) => a.assetType === "bulk").length})
+                  Bulk Assets ({bulkAssignments.length})
+                  {bulkAssignmentsLoading && (
+                    <Loader2 className="h-3 w-3 ml-1 animate-spin" />
+                  )}
                 </TabsTrigger>
                 <TabsTrigger
                   value="unique"
                   className="data-[state=active]:bg-kr-maroon data-[state=active]:text-white"
                 >
-                  Unique Assets (
-                  {assignments.filter((a) => a.assetType === "unique").length})
+                  Unique Assets ({uniqueAssignments.length})
+                  {uniqueAssignmentsLoading && (
+                    <Loader2 className="h-3 w-3 ml-1 animate-spin" />
+                  )}
                 </TabsTrigger>
               </TabsList>
             </div>
 
             {/* Bulk Assets Tab */}
             <TabsContent value="bulk" className="p-6">
-              <div className="relative flex w-full max-w-sm md:max-w-xs mb-4">
-                <Input
-                  type="search"
-                  placeholder="Search assets..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="rounded-r-none"
-                />
-                <Button
-                  type="button"
-                  size="icon"
-                  className="rounded-l-none bg-kr-orange hover:bg-kr-orange-dark"
-                  onClick={handleSearch}
-                  aria-label="Search"
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
-                {inputValue && (
-                  <button
+              {/* Loading State */}
+              {bulkAssignmentsLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin mr-2" />
+                  <span>Loading bulk assignments...</span>
+                </div>
+              )}
+
+              {/* Error State */}
+              {bulkAssignmentsError && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">
+                    Error loading bulk assignments.
+                    <button
+                      onClick={() => refetchBulkAssignments()}
+                      className="ml-2 text-red-600 underline hover:text-red-800"
+                    >
+                      Try again
+                    </button>
+                  </p>
+                </div>
+              )}
+
+              {/* Search Bar */}
+              {!bulkAssignmentsLoading && (
+                <div className="relative flex w-full max-w-sm md:max-w-md mb-6">
+                  <Input
+                    type="search"
+                    placeholder={getSearchPlaceholder()}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="rounded-r-none"
+                  />
+                  <Button
                     type="button"
-                    className="absolute left-8 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 z-10"
-                    onClick={handleClear}
-                    aria-label="Clear search"
+                    size="icon"
+                    className="rounded-l-none bg-kr-orange hover:bg-kr-orange-dark"
+                    onClick={handleSearch}
+                    aria-label="Search"
                   >
-                    ✕
-                  </button>
+                    <Search className="h-4 w-4" />
+                  </Button>
+                  {inputValue && (
+                    <button
+                      type="button"
+                      className="absolute right-12 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 z-10"
+                      onClick={handleClear}
+                      aria-label="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Search Results Info */}
+              {searchQuery && !bulkAssignmentsLoading && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    Found <strong>{filteredAssignments.length}</strong> bulk
+                    assignments matching "{searchQuery}"
+                    <button
+                      onClick={handleClear}
+                      className="ml-2 text-blue-600 underline hover:text-blue-800"
+                    >
+                      Clear search
+                    </button>
+                  </p>
+                </div>
+              )}
+
+              {/* Bulk Assets Statistics */}
+              {!bulkAssignmentsLoading && (
+                <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-green-600">
+                        {
+                          bulkAssignments.filter((a) => a.status === "In use")
+                            .length
+                        }
+                      </p>
+                      <p className="text-sm text-gray-600">In Use</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-yellow-600">
+                        {
+                          bulkAssignments.filter(
+                            (a) => a.status === "Partially returned",
+                          ).length
+                        }
+                      </p>
+                      <p className="text-sm text-gray-600">Partial Returns</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-blue-600">
+                        {
+                          bulkAssignments.filter((a) => a.status === "Returned")
+                            .length
+                        }
+                      </p>
+                      <p className="text-sm text-gray-600">Fully Returned</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-gray-600">
+                        {bulkAssignments.reduce(
+                          (sum, a) => sum + (a.quantityRemaining || 0),
+                          0,
+                        )}
+                      </p>
+                      <p className="text-sm text-gray-600">Items Outstanding</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Bulk Assets Table */}
+              {!bulkAssignmentsLoading && !bulkAssignmentsError && (
+                <BulkAssetsTable
+                  assignments={filteredAssignments}
+                  onView={handleView}
+                  onDelete={handleDelete}
+                />
+              )}
+
+              {/* Pagination for bulk assets */}
+              {!bulkAssignmentsLoading &&
+                bulkAssignmentsData?.pagination &&
+                bulkAssignmentsData.pagination.totalPages > 1 && (
+                  <div className="mt-6">
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={bulkAssignmentsData.pagination.totalPages}
+                      onPageChange={handlePageChange}
+                    />
+                  </div>
                 )}
-              </div>
-              <AssignmentTable
-                assignments={filteredAssignments}
-                onView={handleView}
-                onDelete={handleDelete}
-              />
             </TabsContent>
 
             {/* Unique Assets Tab */}
             <TabsContent value="unique" className="p-6">
-              <div className="relative flex w-full max-w-sm md:max-w-xs mb-4">
-                <Input
-                  type="search"
-                  placeholder="Search assets by name or serial..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="rounded-r-none"
-                />
-                <Button
-                  type="button"
-                  size="icon"
-                  className="rounded-l-none bg-kr-orange hover:bg-kr-orange-dark"
-                  onClick={handleSearch}
-                  aria-label="Search"
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
-                {inputValue && (
-                  <button
+              {/* Loading State */}
+              {uniqueAssignmentsLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin mr-2" />
+                  <span>Loading unique assignments...</span>
+                </div>
+              )}
+
+              {/* Error State */}
+              {uniqueAssignmentsError && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">
+                    Error loading unique assignments.
+                    <button
+                      onClick={() => refetchUniqueAssignments()}
+                      className="ml-2 text-red-600 underline hover:text-red-800"
+                    >
+                      Try again
+                    </button>
+                  </p>
+                </div>
+              )}
+
+              {/* Search Bar */}
+              {!uniqueAssignmentsLoading && (
+                <div className="relative flex w-full max-w-sm md:max-w-md mb-6">
+                  <Input
+                    type="search"
+                    placeholder={getSearchPlaceholder()}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="rounded-r-none"
+                  />
+                  <Button
                     type="button"
-                    className="absolute left-8 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 z-10"
-                    onClick={handleClear}
-                    aria-label="Clear search"
+                    size="icon"
+                    className="rounded-l-none bg-kr-orange hover:bg-kr-orange-dark"
+                    onClick={handleSearch}
+                    aria-label="Search"
                   >
-                    ✕
-                  </button>
+                    <Search className="h-4 w-4" />
+                  </Button>
+                  {inputValue && (
+                    <button
+                      type="button"
+                      className="absolute right-12 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 z-10"
+                      onClick={handleClear}
+                      aria-label="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Search Results Info */}
+              {searchQuery && !uniqueAssignmentsLoading && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    Found <strong>{filteredAssignments.length}</strong> unique
+                    assignments matching "{searchQuery}"
+                    <button
+                      onClick={handleClear}
+                      className="ml-2 text-blue-600 underline hover:text-blue-800"
+                    >
+                      Clear search
+                    </button>
+                  </p>
+                </div>
+              )}
+
+              {/* Unique Assets Statistics */}
+              {!uniqueAssignmentsLoading && (
+                <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-purple-600">
+                        {uniqueAssignments.length}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Total Unique Assets
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-green-600">
+                        {
+                          uniqueAssignments.filter((a) => a.status === "In use")
+                            .length
+                        }
+                      </p>
+                      <p className="text-sm text-gray-600">Currently In Use</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-blue-600">
+                        {
+                          uniqueAssignments.filter(
+                            (a) => a.status === "Returned",
+                          ).length
+                        }
+                      </p>
+                      <p className="text-sm text-gray-600">Returned</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-gray-600">
+                        {
+                          uniqueAssignments.filter(
+                            (a) => a.status === "Not in use",
+                          ).length
+                        }
+                      </p>
+                      <p className="text-sm text-gray-600">Not in Use</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Unique Assets Table */}
+              {!uniqueAssignmentsLoading && !uniqueAssignmentsError && (
+                <UniqueAssetsResponsive
+                  assignments={filteredAssignments}
+                  onView={handleView}
+                  onDelete={handleDelete}
+                />
+              )}
+
+              {/* Pagination for unique assets */}
+              {!uniqueAssignmentsLoading &&
+                uniqueAssignmentsData?.pagination &&
+                uniqueAssignmentsData.pagination.totalPages > 1 && (
+                  <div className="mt-6">
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={uniqueAssignmentsData.pagination.totalPages}
+                      onPageChange={handlePageChange}
+                    />
+                  </div>
                 )}
-              </div>
-              <AssignmentTable
-                assignments={filteredAssignments}
-                onView={handleView}
-                onDelete={handleDelete}
-              />
             </TabsContent>
           </Tabs>
         </div>
@@ -257,7 +634,7 @@ export default function AssetAssignments() {
           open={assignDialogOpen}
           onOpenChange={setAssignDialogOpen}
           assetType={activeTab}
-          availableAssets={getAvailableAssets()}
+          availableAssets={[]} // TODO: Fetch available assets based on type
           onSave={handleSaveAssignment}
           nextId={getNextId()}
         />
@@ -269,9 +646,6 @@ export default function AssetAssignments() {
           onConfirm={confirmDelete}
         />
       </div>
-
-      {/* Pagination */}
-      <Pagination />
     </div>
   );
 }
