@@ -16,9 +16,13 @@ import BulkAssetsTable from "@/components/assignment/bulk/bulk-assets-table";
 import UniqueAssetsResponsive from "@/components/assignment/unique/unique-assets-responsive";
 
 import ViewAssignmentDialog from "@/components/assignment/view-assignments";
-import NewAssignmentDialog from "@/components/assignment/new-assignment-dialogue";
+import NewAssignmentDialog from "@/components/modals/create-new-assignment-modal";
 import DeleteConfirmationDialog from "@/components/assignment/delete-assignment-dialogue";
 import Pagination from "@/components/pagination/pagination";
+
+import { toggleUniqueAssignmentModal, toggleBulkAssignmentModal } from "@/lib/features/modals/assignment-modal";
+import { RootState } from "@/lib/store";
+import { useSelector, useDispatch } from "react-redux";
 
 // Types
 interface Assignment {
@@ -112,6 +116,11 @@ const transformAssignment = (apiAssignment: Assignment) => ({
 });
 
 export default function AssetAssignments() {
+  const dispatch = useDispatch();
+  const { isBulkAssignmentModalOpen, isUniqueAssignmentModalOpen } = useSelector(
+    (state: RootState) => state.assignmentModal,
+  );
+  
   // Tab state
   const [activeTab, setActiveTab] = useState<"bulk" | "unique">("bulk");
 
@@ -123,9 +132,8 @@ export default function AssetAssignments() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
 
-  // Dialog states
+  // Dialog states - keeping view dialog as local state since it's not in Redux yet
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
@@ -214,7 +222,12 @@ export default function AssetAssignments() {
   };
 
   const handleNewAssignment = () => {
-    setAssignDialogOpen(true);
+    // Dispatch the appropriate Redux action based on active tab
+    if (activeTab === "bulk") {
+      dispatch(toggleBulkAssignmentModal());
+    } else {
+      dispatch(toggleUniqueAssignmentModal());
+    }
   };
 
   const handleSaveAssignment = (newAssignment: any) => {
@@ -258,6 +271,15 @@ export default function AssetAssignments() {
     }
   };
 
+  // Handle closing assignment modals
+  const handleCloseAssignmentModal = () => {
+    if (activeTab === "bulk" && isBulkAssignmentModalOpen) {
+      dispatch(toggleBulkAssignmentModal());
+    } else if (activeTab === "unique" && isUniqueAssignmentModalOpen) {
+      dispatch(toggleUniqueAssignmentModal());
+    }
+  };
+
   // Generate next assignment ID
   const getNextId = () => {
     const maxId = Math.max(
@@ -285,12 +307,17 @@ export default function AssetAssignments() {
     setCurrentPage(page);
   };
 
+  // Determine which modal is open based on active tab
+  const isAssignmentModalOpen = 
+    (activeTab === "bulk" && isBulkAssignmentModalOpen) || 
+    (activeTab === "unique" && isUniqueAssignmentModalOpen);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-full mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row items-center justify-between mb-8 mx-4 gap-6">
-          <div className="px-4 text-center md:text-left">
+          <div className="px-4 mt-4 text-center md:text-left">
             <h1 className="md:text-3xl text-lg font-bold text-gray-900">
               Asset Assignments
             </h1>
@@ -631,8 +658,8 @@ export default function AssetAssignments() {
         />
 
         <NewAssignmentDialog
-          open={assignDialogOpen}
-          onOpenChange={setAssignDialogOpen}
+          open={isAssignmentModalOpen}
+          onOpenChange={handleCloseAssignmentModal}
           assetType={activeTab}
           availableAssets={[]} // TODO: Fetch available assets based on type
           onSave={handleSaveAssignment}

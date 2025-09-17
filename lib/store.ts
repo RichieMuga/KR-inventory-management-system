@@ -4,6 +4,7 @@ import assetModalSlice from "@/lib/features/modals/asset-modal-buttons";
 import userModalSlice from "@/lib/features/modals/user-creation-modal";
 import locationModalSlice from "@/lib/features/modals/location-modal";
 import paginationSlice from "@/lib/features/pagination/paginationSlice";
+import assignmentModalSlice from "@/lib/features/modals/assignment-modal"
 
 export const makeStore = () => {
   return configureStore({
@@ -12,6 +13,7 @@ export const makeStore = () => {
       assetModal: assetModalSlice,
       userModal: userModalSlice,
       locationModal: locationModalSlice,
+      assignmentModal: assignmentModalSlice,
       // pagination
       pagination: paginationSlice,
     },
