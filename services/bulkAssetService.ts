@@ -1,11 +1,13 @@
 import { db } from "@/db/connection";
-import { sql, eq, and } from "drizzle-orm";
+import { sql, eq, and, or, like, lte, gte } from "drizzle-orm";
 import {
   assets,
   assetMovement,
   restockLog,
   users,
   locations,
+  type Asset,
+  type NewAssetMovement,
 } from "@/db/schema";
 
 type CreateBulkAssetInput = {
@@ -25,6 +27,27 @@ type UpdateBulkAssetInput = {
   modelNumber?: string | null;
   notes?: string;
 };
+
+// Add filter types for bulk assets
+export type BulkAssetFilters = {
+  bulkStatus?: "active" | "out_of_stock" | "discontinued";
+  locationId?: number;
+  keeperPayrollNumber?: string;
+  search?: string;
+  lowStock?: boolean; // Filter for items at or below minimum threshold
+  outOfStock?: boolean; // Filter for items with 0 stock
+};
+
+// Extend Asset type with location and keeper info
+export interface BulkAssetWithDetails extends Asset {
+  keeperName: string | null;
+  location?: {
+    locationId: number;
+    regionName: string;
+    departmentName: string | null;
+    notes: string | null;
+  };
+}
 
 export class BulkAssetService {
   /**
@@ -106,14 +129,17 @@ export class BulkAssetService {
           .returning();
 
         // ✅ 4. Log movement
-        await tx.insert(assetMovement).values({
+        const movementData: NewAssetMovement = {
           assetId: asset.assetId,
+          fromLocationId: null,
           toLocationId: locationId,
           movedBy: keeperPayrollNumber,
-          movementType: "adjustment" as const,
+          movementType: "adjustment",
           quantity: quantity,
           notes: `Initial stock: ${quantity} units. ${notes}`,
-        });
+        };
+
+        await tx.insert(assetMovement).values(movementData);
 
         return asset;
       });
@@ -221,30 +247,158 @@ export class BulkAssetService {
   }
 
   /**
-   * Get all bulk assets with pagination
+   * Get paginated bulk assets with filters and details
    */
-  static async getAllBulkAssets(page = 1, limit = 10) {
+  static async getPaginatedBulkAssets(
+    page: number,
+    limit: number,
+    filters?: BulkAssetFilters,
+  ): Promise<{ data: BulkAssetWithDetails[]; total: number }> {
     const offset = (Math.max(page, 1) - 1) * Math.min(limit, 100);
+    const conditions = [eq(assets.isBulk, true)];
 
-    const data = await db
-      .select()
+    // Add filters
+    if (filters?.bulkStatus) {
+      conditions.push(eq(assets.bulkStatus, filters.bulkStatus));
+    }
+    if (filters?.locationId) {
+      conditions.push(eq(assets.locationId, filters.locationId));
+    }
+    if (filters?.keeperPayrollNumber) {
+      conditions.push(
+        eq(assets.keeperPayrollNumber, filters.keeperPayrollNumber),
+      );
+    }
+
+    // Special stock-based filters
+    if (filters?.outOfStock) {
+      conditions.push(eq(assets.currentStockLevel, 0));
+    }
+    if (filters?.lowStock && !filters?.outOfStock) {
+      // Items at or below minimum threshold but not out of stock
+      conditions.push(
+        and(
+          lte(assets.currentStockLevel, assets.minimumThreshold),
+          gte(assets.currentStockLevel, 1)
+        )
+      );
+    }
+
+    // Add search conditions
+    if (filters?.search) {
+      const searchTerm = `%${filters.search.toLowerCase()}%`;
+      conditions.push(
+        or(
+          like(sql`LOWER(${assets.name})`, searchTerm),
+          like(sql`LOWER(${assets.modelNumber})`, searchTerm),
+          like(sql`LOWER(${assets.keeperPayrollNumber})`, searchTerm),
+          like(sql`LOWER(${assets.notes})`, searchTerm),
+          // Also search by user names
+          like(sql`LOWER(${users.firstName})`, searchTerm),
+          like(sql`LOWER(${users.lastName})`, searchTerm),
+          // Search by location details
+          like(sql`LOWER(${locations.regionName})`, searchTerm),
+          like(sql`LOWER(${locations.departmentName})`, searchTerm),
+        ),
+      );
+    }
+
+    const whereClause =
+      conditions.length > 1 ? and(...conditions) : conditions[0] || undefined;
+
+    // Fetch assets with location and user details using JOINs
+    const baseQuery = db
+      .select({
+        // Asset fields
+        assetId: assets.assetId,
+        name: assets.name,
+        keeperPayrollNumber: assets.keeperPayrollNumber,
+        locationId: assets.locationId,
+        serialNumber: assets.serialNumber,
+        isBulk: assets.isBulk,
+        individualStatus: assets.individualStatus,
+        bulkStatus: assets.bulkStatus,
+        currentStockLevel: assets.currentStockLevel,
+        minimumThreshold: assets.minimumThreshold,
+        lastRestocked: assets.lastRestocked,
+        modelNumber: assets.modelNumber,
+        notes: assets.notes,
+        createdAt: assets.createdAt,
+        updatedAt: assets.updatedAt,
+        // Location fields
+        locationRegionName: locations.regionName,
+        locationDepartmentName: locations.departmentName,
+        locationNotes: locations.notes,
+        // User fields
+        keeperFirstName: users.firstName,
+        keeperLastName: users.lastName,
+      })
       .from(assets)
-      .where(eq(assets.isBulk, true))
-      .limit(Math.min(limit, 100))
-      .offset(offset);
+      .leftJoin(locations, eq(assets.locationId, locations.locationId))
+      .leftJoin(users, eq(assets.keeperPayrollNumber, users.payrollNumber));
 
-    const [{ count }] = await db
+    const data = whereClause
+      ? await baseQuery
+          .where(whereClause)
+          .limit(Math.min(limit, 100))
+          .offset(offset)
+          .orderBy(assets.createdAt)
+      : await baseQuery
+          .limit(Math.min(limit, 100))
+          .offset(offset)
+          .orderBy(assets.createdAt);
+
+    // Transform the data to include location object and keeper name
+    const transformedData: BulkAssetWithDetails[] = data.map((row) => ({
+      assetId: row.assetId,
+      name: row.name,
+      keeperPayrollNumber: row.keeperPayrollNumber,
+      locationId: row.locationId,
+      serialNumber: row.serialNumber,
+      isBulk: row.isBulk,
+      individualStatus: row.individualStatus,
+      bulkStatus: row.bulkStatus,
+      currentStockLevel: row.currentStockLevel,
+      minimumThreshold: row.minimumThreshold,
+      lastRestocked: row.lastRestocked,
+      modelNumber: row.modelNumber,
+      notes: row.notes,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      // Add keeper name field
+      keeperName:
+        row.keeperFirstName && row.keeperLastName
+          ? `${row.keeperFirstName} ${row.keeperLastName}`
+          : null,
+      location: row.locationRegionName
+        ? {
+            locationId: row.locationId,
+            regionName: row.locationRegionName,
+            departmentName: row.locationDepartmentName,
+            notes: row.locationNotes,
+          }
+        : undefined,
+    }));
+
+    // Get total count with same filters and joins
+    const baseCountQuery = db
       .select({ count: sql<number>`count(*)` })
       .from(assets)
-      .where(eq(assets.isBulk, true));
+      .leftJoin(locations, eq(assets.locationId, locations.locationId))
+      .leftJoin(users, eq(assets.keeperPayrollNumber, users.payrollNumber));
 
-    return {
-      page: Math.max(page, 1),
-      limit: Math.min(limit, 100),
-      total: count,
-      totalPages: Math.ceil(count / Math.min(limit, 100)),
-      data,
-    };
+    const [{ count }] = whereClause
+      ? await baseCountQuery.where(whereClause)
+      : await baseCountQuery;
+
+    return { data: transformedData, total: count };
+  }
+
+  /**
+   * Get all bulk assets with pagination (kept for backwards compatibility)
+   */
+  static async getAllBulkAssets(page = 1, limit = 10) {
+    return await this.getPaginatedBulkAssets(page, limit);
   }
 
   /**
