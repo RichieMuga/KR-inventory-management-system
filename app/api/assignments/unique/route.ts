@@ -46,10 +46,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-
+    
     // Validate required fields for unique assignment
     const { assetId, assignedTo, assignedBy } = body;
-
     if (!assetId || !assignedTo || !assignedBy) {
       return NextResponse.json(
         { error: "Missing required fields: assetId, assignedTo, assignedBy" },
@@ -57,15 +56,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Force quantity to 1 for unique assets
+    // Validate locationId if provided
+    if (body.locationId && (!Number.isInteger(Number(body.locationId)) || Number(body.locationId) <= 0)) {
+      return NextResponse.json(
+        { error: "locationId must be a positive integer" },
+        { status: 400 },
+      );
+    }
+
+    // Force quantity to 1 for unique assets and map locationId to forceLocationId
     const assignmentData = {
-      ...body,
+      assetId: Number(assetId),
+      assignedTo,
+      assignedBy,
       quantity: 1,
+      conditionIssued: body.conditionIssued || "good",
+      notes: body.notes,
+      // Map locationId from request body to forceLocationId for the service
+      forceLocationId: body.locationId ? Number(body.locationId) : undefined,
     };
 
-    const result =
-      await AssetAssignmentService.createAssignment(assignmentData);
-
+    const result = await AssetAssignmentService.createAssignment(assignmentData);
+    
     if (!result.success) {
       return NextResponse.json({ error: result.message }, { status: 400 });
     }
