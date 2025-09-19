@@ -54,33 +54,48 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-
+    
     // Validate required fields for bulk assignment
     const { assetId, assignedTo, assignedBy, quantity } = body;
-
     if (!assetId || !assignedTo || !assignedBy || !quantity) {
       return NextResponse.json(
         {
-          error:
-            "Missing required fields: assetId, assignedTo, assignedBy, quantity",
+          error: "Missing required fields: assetId, assignedTo, assignedBy, quantity",
         },
         { status: 400 },
       );
     }
 
-    if (quantity <= 0) {
+    const parsedQuantity = parseInt(quantity);
+    if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
       return NextResponse.json(
-        { error: "Quantity must be greater than 0" },
+        { error: "Quantity must be a positive integer" },
         { status: 400 },
       );
     }
 
-    // Ensure this is for a bulk asset
-    const result = await AssetAssignmentService.createAssignment({
-      ...body,
-      quantity: parseInt(quantity), // Ensure quantity is a number
-    });
+    // Validate locationId if provided
+    if (body.locationId && (!Number.isInteger(Number(body.locationId)) || Number(body.locationId) <= 0)) {
+      return NextResponse.json(
+        { error: "locationId must be a positive integer" },
+        { status: 400 },
+      );
+    }
 
+    // Prepare assignment data with locationId mapped to forceLocationId
+    const assignmentData = {
+      assetId: Number(assetId),
+      assignedTo,
+      assignedBy,
+      quantity: parsedQuantity,
+      conditionIssued: body.conditionIssued || "good",
+      notes: body.notes,
+      // Map locationId from request body to forceLocationId for the service
+      forceLocationId: body.locationId ? Number(body.locationId) : undefined,
+    };
+
+    const result = await AssetAssignmentService.createAssignment(assignmentData);
+    
     if (!result.success) {
       return NextResponse.json({ error: result.message }, { status: 400 });
     }
