@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
-import { usePathname } from "next/navigation"; // ✅ new import
+import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { Menu, User, Lock, LogOut, ChevronDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -18,22 +18,29 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api/axiosInterceptor";
 
 interface UserInfo {
   payrollNumber: string;
   firstName?: string;
   lastName?: string;
+  role?: string;
 }
 
-const user: UserInfo = {
-  payrollNumber: "12345",
-  firstName: "John",
-  lastName: "Doe",
-};
+interface TokenPayload {
+  payrollNumber: string;
+  role: string;
+  firstName: string;
+  lastName: string;
+  iat: number;
+  exp: number;
+}
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
-  const pathname = usePathname(); // ✅ get current route
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const pathname = usePathname();
 
   const navLinks = [
     { href: "/dashboard", label: "Dashboard" },
@@ -45,6 +52,95 @@ export function Header() {
     { href: "/users", label: "Users" },
     { href: "/locations", label: "Locations" },
   ];
+
+  // Function to decode JWT token
+  const decodeToken = (token: string): TokenPayload | null => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      console.error('Error decoding token:', error);
+      return null;
+    }
+  };
+
+  // Fetch user data from API
+  const fetchUserData = async (payrollNumber: string) => {
+    try {
+      const response = await api.get(`/users/${payrollNumber}`);
+      if (response.data.success) {
+        setUser(response.data.user);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      // Fallback to token data if API call fails
+      const token = localStorage.getItem("authToken");
+      if (token) {
+        const tokenData = decodeToken(token);
+        if (tokenData) {
+          setUser({
+            payrollNumber: tokenData.payrollNumber,
+            firstName: tokenData.firstName,
+            lastName: tokenData.lastName,
+            role: tokenData.role,
+          });
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initialize user data on component mount
+  useEffect(() => {
+    // Don't check auth on login/auth pages
+    if (pathname.startsWith('/auth/')) {
+      setLoading(false);
+      return;
+    }
+
+    const token = localStorage.getItem("authToken");
+    if (token) {
+      const tokenData = decodeToken(token);
+      if (tokenData) {
+        // Check if token is expired
+        const currentTime = Math.floor(Date.now() / 1000);
+        if (tokenData.exp < currentTime) {
+          // Token expired, redirect to login
+          localStorage.removeItem("authToken");
+          window.location.href = "/auth/login";
+          return;
+        }
+        
+        // Set initial user data from token (for immediate display)
+        setUser({
+          payrollNumber: tokenData.payrollNumber,
+          firstName: tokenData.firstName,
+          lastName: tokenData.lastName,
+          role: tokenData.role,
+        });
+        
+        // Fetch fresh user data from API
+        fetchUserData(tokenData.payrollNumber);
+      } else {
+        setLoading(false);
+      }
+    } else {
+      // No token found, redirect to login (but not if already on auth pages)
+      if (!pathname.startsWith('/auth/')) {
+        window.location.href = "/auth/login";
+      } else {
+        setLoading(false);
+      }
+    }
+  }, [pathname]);
 
   const getUserInitials = (user: UserInfo) => {
     if (user.firstName && user.lastName) {
@@ -59,6 +155,49 @@ export function Header() {
     }
     return user.payrollNumber;
   };
+
+  const handleLogout = () => {
+    localStorage.removeItem("authToken");
+    window.location.href = "/auth/login";
+  };
+
+  // Show loading state or return null if no user data
+  if (loading) {
+    return (
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
+        <div className="flex items-center">
+          <Image
+            src="/kr_logo.png"
+            alt="Kenya Railways Logo"
+            width={40}
+            height={40}
+            className="h-8 w-auto"
+          />
+          <span className="ml-2 text-kr-maroon-dark font-bold">Loading...</span>
+        </div>
+      </header>
+    );
+  }
+
+  // If on auth pages or no user, show minimal header
+  if (pathname.startsWith('/auth/') || !user) {
+    return (
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
+        <div className="flex items-center">
+          <Image
+            src="/kr_logo.png"
+            alt="Kenya Railways Logo"
+            width={40}
+            height={40}
+            className="h-8 w-auto"
+          />
+          <span className="ml-2 text-kr-maroon-dark font-bold">
+            Store Keeping and Asset Tracking System
+          </span>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
@@ -164,6 +303,9 @@ export function Header() {
                 <span className="text-sm font-medium text-gray-900">
                   {getUserDisplayName(user)}
                 </span>
+                <span className="text-xs text-gray-500 capitalize">
+                  {user.role}
+                </span>
               </div>
               <ChevronDown className="h-4 w-4 text-gray-500 hidden md:block" />
             </Button>
@@ -175,6 +317,7 @@ export function Header() {
                   {getUserDisplayName(user)}
                 </p>
                 <p className="text-xs text-gray-500">{user.payrollNumber}</p>
+                <p className="text-xs text-gray-500 capitalize">{user.role}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -187,7 +330,10 @@ export function Header() {
               Change Password
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-600">
+            <DropdownMenuItem 
+              className="text-red-600 cursor-pointer"
+              onClick={handleLogout}
+            >
               <LogOut className="mr-2 h-4 w-4" />
               Logout
             </DropdownMenuItem>
