@@ -2,7 +2,7 @@
 // Fetch paginated track unique assets with optional filters
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/middleware/authMiddleware";
-import { UniqueAssetService } from "@/services/assignment/uniqueAssetAssignmentService";
+import { UniqueAssetService } from "@/services/tracking-and-movement/uniqueAssetAssignmentService";
 
 // GET /api/unique-asset-tracking?page=1&limit=10
 // Fetch paginated unique assets that are in use (is_bulk = false and status = in_use)

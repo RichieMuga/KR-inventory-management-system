@@ -1,4 +1,4 @@
-import { db } from "@/db/connection"; // Adjust import path as needed
+import { db } from "@/db/connection";
 import {
   assets,
   assetMovement,
@@ -8,7 +8,7 @@ import {
   type Asset,
   type AssetMovement,
   type AssetAssignment,
-} from "@/db/schema"; // Adjust import path as needed
+} from "@/db/schema";
 import { eq, and, desc, asc, ilike, isNull, isNotNull, sql, count } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 

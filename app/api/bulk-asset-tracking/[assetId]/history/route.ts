@@ -1,7 +1,7 @@
 // /api/bulk-asset-tracking/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/middleware/authMiddleware";
-import { BulkAssetService } from "@/services/assignment/bulkAssetAssignmentService";
+import { BulkAssetService } from "@/services/tracking-and-movement/bulkAssetAssignmentService";
 
 // GET /api/bulk-asset-tracking
 // Get all tracked bulk assets with pagination and filtering
