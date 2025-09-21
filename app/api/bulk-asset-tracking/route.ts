@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/middleware/authMiddleware";
-import { BulkAssetService } from "@/services/tracking/bulkAssetTrackingService";
+import { BulkAssetService } from "@/services/assignment/bulkAssetTrackingService";
 
 // GET /api/bulk-asset-tracking?page=1&limit=10
 // Fetch paginated bulk assets that are active (is_bulk = true and status = active)
