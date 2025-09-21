@@ -5,6 +5,8 @@ import userModalSlice from "@/lib/features/modals/user-creation-modal";
 import locationModalSlice from "@/lib/features/modals/location-modal";
 import paginationSlice from "@/lib/features/pagination/paginationSlice";
 import assignmentModalSlice from "@/lib/features/modals/assignment-modal"
+import uniqueAssetsModalSlice from "@/lib/features/modals/unique-asset-tracking-modal";
+import bulkAssetsModalSlice from "@/lib/features/modals/bulk-asset-tracking-modal";
 
 export const makeStore = () => {
   return configureStore({
@@ -14,6 +16,8 @@ export const makeStore = () => {
       userModal: userModalSlice,
       locationModal: locationModalSlice,
       assignmentModal: assignmentModalSlice,
+      uniqueAssetTrackingModal: uniqueAssetsModalSlice,
+      bulkAssetTrackingModal: bulkAssetsModalSlice,
       // pagination
       pagination: paginationSlice,
     },
