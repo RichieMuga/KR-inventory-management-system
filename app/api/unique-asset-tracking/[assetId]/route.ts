@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/middleware/authMiddleware";
-import { UniqueAssetService } from "@/services/tracking/uniqueAssetTrackingService";
+import { UniqueAssetService } from "@/services/assignment/uniqueAssetAssignmentService";
 
 // GET /api/unique-asset-tracking/[assetId]
 // Get detailed information for a single unique asset
