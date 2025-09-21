@@ -1,5 +1,3 @@
-// components/tracking/AssetsTable.tsx
-
 "use client";
 
 import { useDispatch } from "react-redux";
