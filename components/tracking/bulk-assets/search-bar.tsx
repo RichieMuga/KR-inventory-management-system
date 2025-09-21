@@ -4,29 +4,26 @@ import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEffect } from "react";
-
 interface SearchForm {
   searchTerm: string;
 }
-
 interface SearchBarProps {
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   onSearch?: (term: string) => void;
   placeholder?: string;
 }
-
-export default function SearchBar({ 
-  searchTerm, 
-  setSearchTerm, 
+export default function SearchBar({
+  searchTerm,
+  setSearchTerm,
   onSearch,
   placeholder = "Search assets by name, model, or keeper..."
 }: SearchBarProps) {
-  const { 
-    register, 
-    handleSubmit, 
-    watch, 
-    setValue, 
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
     reset,
     formState: { isSubmitting }
   } = useForm<SearchForm>({
@@ -34,38 +31,34 @@ export default function SearchBar({
       searchTerm: searchTerm || ""
     }
   });
-
-  // Watch the form input for real-time search
   const watchedSearchTerm = watch("searchTerm");
-
-  // Sync with parent state
+  // Only update parent state when the watched term changes
   useEffect(() => {
-    setSearchTerm(watchedSearchTerm);
-    
-    // Optional: Trigger search on every change for real-time search
-    if (onSearch) {
-      const timeoutId = setTimeout(() => {
-        onSearch(watchedSearchTerm);
-      }, 300); // Debounce for 300ms
-      
-      return () => clearTimeout(timeoutId);
+    if (watchedSearchTerm !== searchTerm) {
+      setSearchTerm(watchedSearchTerm);
     }
-  }, [watchedSearchTerm, setSearchTerm, onSearch]);
-
-  // Update form when external searchTerm changes
+  }, [watchedSearchTerm]); // Remove setSearchTerm and searchTerm from dependencies
+  // Separate effect for search debouncing
+  useEffect(() => {
+    if (!onSearch) return;
+   
+    const timeoutId = setTimeout(() => {
+      onSearch(watchedSearchTerm);
+    }, 500);
+   
+    return () => clearTimeout(timeoutId);
+  }, [watchedSearchTerm]); // Remove onSearch from dependencies
+  // Sync form with external changes
   useEffect(() => {
     if (searchTerm !== watchedSearchTerm) {
       setValue("searchTerm", searchTerm);
     }
-  }, [searchTerm, watchedSearchTerm, setValue]);
-
+  }, [searchTerm, setValue]);
   const onSubmit = (data: SearchForm) => {
-    console.log("Searching for:", data.searchTerm);
     if (onSearch) {
       onSearch(data.searchTerm);
     }
   };
-
   const handleClear = () => {
     reset({ searchTerm: "" });
     setSearchTerm("");
@@ -73,22 +66,22 @@ export default function SearchBar({
       onSearch("");
     }
   };
-
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="relative flex w-full max-w-sm md:max-w-xs">
+    <form onSubmit={handleSubmit(onSubmit)} className="relative flex w-full max-w-sm md:max-w-md">
       <div className="relative flex-1">
         <Input
           {...register("searchTerm")}
           type="search"
           placeholder={placeholder}
-          className="pr-8"
+          className="pr-12"
         />
+       
         {watchedSearchTerm && (
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 p-0 hover:bg-gray-100"
+            className="absolute right-12 top-1/2 h-6 w-6 -translate-y-1/2 p-0 hover:bg-gray-100"
             onClick={handleClear}
             aria-label="Clear search"
           >

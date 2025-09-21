@@ -9,7 +9,7 @@ import {
   type AssetMovement,
   type AssetAssignment,
 } from "@/db/schema";
-import { eq, and, desc, asc, ilike, isNull, isNotNull, sql, count } from "drizzle-orm";
+import { eq, and, desc, asc, ilike, isNull, isNotNull, sql, count, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 // Types for service responses
@@ -63,7 +63,7 @@ export interface TrackingFilters {
   status?: "in_use" | "not_in_use" | "retired";
   locationId?: number;
   keeperPayrollNumber?: string;
-  searchTerm?: string; // For searching by name, serial number, or model
+  searchTerm?: string; // For searching by name, serial number, model, keeper name
   assignedTo?: string; // Filter by currently assigned user
 }
 
@@ -99,54 +99,69 @@ export class UniqueAssetService {
     const movedByUsers = alias(users, "moved_by_users");
     const fromLocations = alias(locations, "from_locations");
 
-    // Build conditions array
+    // Build conditions array - start with unique assets only
     const conditions = [eq(assets.isBulk, false)];
 
+    // Status filter
     if (filters.status) {
       conditions.push(eq(assets.individualStatus, filters.status));
     }
 
+    // Location filter
     if (filters.locationId) {
       conditions.push(eq(assets.locationId, filters.locationId));
     }
 
+    // Keeper filter
     if (filters.keeperPayrollNumber) {
       conditions.push(eq(assets.keeperPayrollNumber, filters.keeperPayrollNumber));
     }
 
-    if (filters.searchTerm) {
-      const searchCondition = sql`(
-        ${assets.name} ILIKE ${`%${filters.searchTerm}%`} OR
-        ${assets.serialNumber} ILIKE ${`%${filters.searchTerm}%`} OR
-        ${assets.modelNumber} ILIKE ${`%${filters.searchTerm}%`}
-      )`;
-      conditions.push(searchCondition);
+    // Enhanced search functionality
+    if (filters.searchTerm && filters.searchTerm.trim()) {
+      const searchTerm = filters.searchTerm.trim();
+      const searchCondition = or(
+        // Search in asset fields
+        ilike(assets.name, `%${searchTerm}%`),
+        ilike(assets.serialNumber, `%${searchTerm}%`),
+        ilike(assets.modelNumber, `%${searchTerm}%`),
+        // Search in keeper names (concatenated first + last name)
+        sql`CONCAT(${keeperUsers.firstName}, ' ', ${keeperUsers.lastName}) ILIKE ${`%${searchTerm}%`}`,
+        // Search in location names
+        sql`CONCAT(${locations.regionName}, ' - ', ${locations.departmentName}) ILIKE ${`%${searchTerm}%`}`
+      );
+      if (searchCondition) {
+        conditions.push(searchCondition);
+      }
     }
 
-    // Get total count for pagination
+    // Get total count for pagination - build separate count query
     let countQuery = db
       .select({ count: count() })
-      .from(assets);
+      .from(assets)
+      .leftJoin(locations, eq(assets.locationId, locations.locationId))
+      .leftJoin(keeperUsers, eq(assets.keeperPayrollNumber, keeperUsers.payrollNumber));
 
-    // Add assignment filter to count if needed
+    // Add assignment join if filtering by assignedTo
     if (filters.assignedTo) {
-      countQuery = countQuery
-        .leftJoin(
-          assetAssignment,
-          and(
-            eq(assets.assetId, assetAssignment.assetId),
-            isNull(assetAssignment.dateReturned)
-          )
-        );
-      conditions.push(eq(assetAssignment.assignedTo, filters.assignedTo));
+      countQuery = countQuery.leftJoin(
+        assetAssignment,
+        and(
+          eq(assets.assetId, assetAssignment.assetId),
+          isNull(assetAssignment.dateReturned),
+          eq(assetAssignment.assignedTo, filters.assignedTo)
+        )
+      );
+      // Add condition that assignment must exist
+      conditions.push(isNotNull(assetAssignment.assignmentId));
     }
 
+    // Apply conditions to count query
     countQuery = countQuery.where(and(...conditions));
-
     const [{ count: total }] = await countQuery;
 
     // Main query to get asset details
-    let query = db
+    const query = db
       .select({
         // Asset fields
         assetId: assets.assetId,
@@ -174,21 +189,31 @@ export class UniqueAssetService {
 
     // Add assignment join if needed
     if (filters.assignedTo) {
-      query = query.leftJoin(
+      query.leftJoin(
         assetAssignment,
         and(
           eq(assets.assetId, assetAssignment.assetId),
-          isNull(assetAssignment.dateReturned)
+          isNull(assetAssignment.dateReturned),
+          eq(assetAssignment.assignedTo, filters.assignedTo)
         )
       );
+      conditions.push(isNotNull(assetAssignment.assignmentId));
     }
 
-    // Apply all conditions
-    query = query.where(and(...conditions));
-
-    // Get paginated results
+    // Apply all conditions and get paginated results
     const assetResults = await query
-      .orderBy(asc(assets.name))
+      .where(and(...conditions))
+      .orderBy(
+        // Order by relevance if searching, otherwise by name
+        filters.searchTerm ? 
+          sql`CASE 
+            WHEN ${assets.name} ILIKE ${`%${filters.searchTerm}%`} THEN 1
+            WHEN ${assets.serialNumber} ILIKE ${`%${filters.searchTerm}%`} THEN 2
+            WHEN ${assets.modelNumber} ILIKE ${`%${filters.searchTerm}%`} THEN 3
+            ELSE 4
+          END, ${assets.name}` 
+          : asc(assets.name)
+      )
       .limit(limit)
       .offset(offset);
 
