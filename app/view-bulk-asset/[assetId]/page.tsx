@@ -1,11 +1,17 @@
 import { ViewAssetPage } from "@/components/asset-view-page"
 
 interface PageProps {
-  params: {
-    id: string
-  }
+  params: Promise<{
+    assetId: string
+  }>
 }
 
-export default function AssetViewPage({ params }: PageProps) {
-  return <ViewAssetPage assetId={params.id} />
+export default async function AssetViewPage({ params }: PageProps) {
+  const { assetId } = await params;
+  
+  if (!assetId) {
+    return <div>Error: No asset ID found</div>;
+  }
+
+  return <ViewAssetPage assetId={assetId} />
 }
