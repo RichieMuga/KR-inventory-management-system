@@ -21,12 +21,14 @@ type CreateBulkAssetInput = {
   notes?: string;
 };
 
-type UpdateBulkAssetInput = {
+interface UpdateBulkAssetInput {
   quantity?: number;
   minimumThreshold?: number;
-  modelNumber?: string | null;
+  modelNumber?: string;
+  keeperPayrollNumber?: string;
+  locationId?: number;
   notes?: string;
-};
+}
 
 // Add filter types for bulk assets
 export type BulkAssetFilters = {
@@ -175,9 +177,8 @@ export class BulkAssetService {
 
     return asset || null;
   }
-
   /**
-   * Update bulk asset (stock, threshold, etc.)
+   * Update bulk asset by ID
    */
   static async updateBulkAsset(
     assetId: number,
@@ -189,6 +190,7 @@ export class BulkAssetService {
         isBulk: assets.isBulk,
         currentStockLevel: assets.currentStockLevel,
         locationId: assets.locationId,
+        keeperPayrollNumber: assets.keeperPayrollNumber,
       })
       .from(assets)
       .where(eq(assets.assetId, assetId))
@@ -199,9 +201,42 @@ export class BulkAssetService {
     }
 
     const currentStock = assetResult[0].currentStockLevel ?? 0;
-    const locationId = assetResult[0].locationId;
+    const currentLocationId = assetResult[0].locationId;
+    const currentKeeperPayrollNumber = assetResult[0].keeperPayrollNumber;
+
     const updates: any = { updatedAt: new Date() };
 
+    // Validate new keeper if provided
+    if (data.keeperPayrollNumber !== undefined) {
+      if (data.keeperPayrollNumber !== null && data.keeperPayrollNumber !== "") {
+        const keeperExists = await db
+          .select({ payrollNumber: users.payrollNumber })
+          .from(users)
+          .where(eq(users.payrollNumber, data.keeperPayrollNumber))
+          .limit(1);
+
+        if (!keeperExists.length) {
+          throw new Error(`Keeper with payroll number ${data.keeperPayrollNumber} not found`);
+        }
+      }
+      updates.keeperPayrollNumber = data.keeperPayrollNumber || null;
+    }
+
+    // Validate new location if provided
+    if (data.locationId !== undefined) {
+      const locationExists = await db
+        .select({ locationId: locations.locationId })
+        .from(locations)
+        .where(eq(locations.locationId, data.locationId))
+        .limit(1);
+
+      if (!locationExists.length) {
+        throw new Error(`Location with ID ${data.locationId} not found`);
+      }
+      updates.locationId = data.locationId;
+    }
+
+    // Handle quantity updates
     if (data.quantity !== undefined) {
       if (data.quantity < 0) throw new Error("Quantity cannot be negative");
       updates.currentStockLevel = data.quantity;
@@ -225,13 +260,13 @@ export class BulkAssetService {
         .where(eq(assets.assetId, assetId))
         .returning();
 
-      // Log adjustment if quantity changed
+      // Log quantity adjustment if changed
       if (data.quantity !== undefined && data.quantity !== currentStock) {
         const change = data.quantity - currentStock;
         await tx.insert(assetMovement).values({
           assetId: assetId,
-          fromLocationId: change < 0 ? locationId : null,
-          toLocationId: change > 0 ? locationId : null,
+          fromLocationId: change < 0 ? (data.locationId || currentLocationId) : null,
+          toLocationId: change > 0 ? (data.locationId || currentLocationId) : null,
           movedBy: updatedBy,
           movementType: "adjustment",
           quantity: Math.abs(change),
@@ -239,6 +274,39 @@ export class BulkAssetService {
             change > 0
               ? `Restocked: +${change} units. ${data.notes || ""}`
               : `Consumed: -${Math.abs(change)} units. ${data.notes || ""}`,
+        });
+      }
+
+      // Log location transfer if location changed
+      if (data.locationId !== undefined && data.locationId !== currentLocationId) {
+        await tx.insert(assetMovement).values({
+          assetId: assetId,
+          fromLocationId: currentLocationId,
+          toLocationId: data.locationId,
+          movedBy: updatedBy,
+          movementType: "transfer",
+          quantity: updated.currentStockLevel || 0, // Transfer all current stock
+          notes: `Asset transferred to new location. ${data.notes || ""}`,
+        });
+      }
+
+      // Log keeper assignment change (optional - you might want to track this)
+      if (data.keeperPayrollNumber !== undefined && 
+          data.keeperPayrollNumber !== currentKeeperPayrollNumber) {
+        
+        const keeperChangeNote = currentKeeperPayrollNumber 
+          ? `Keeper changed from ${currentKeeperPayrollNumber} to ${data.keeperPayrollNumber || 'unassigned'}`
+          : `Keeper assigned: ${data.keeperPayrollNumber || 'unassigned'}`;
+
+        // You could create a separate keeper assignment log table, or add to asset movement
+        await tx.insert(assetMovement).values({
+          assetId: assetId,
+          fromLocationId: updated.locationId,
+          toLocationId: updated.locationId, // Same location, just keeper change
+          movedBy: updatedBy,
+          movementType: "assignment", // Make sure this enum value exists
+          quantity: 0, // No physical movement of stock
+          notes: `${keeperChangeNote}. ${data.notes || ""}`,
         });
       }
 
