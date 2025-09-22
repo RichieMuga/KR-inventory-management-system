@@ -1,7 +1,7 @@
 // GET /api/unique-asset-tracking?page=1&limit=10&search=laptop&status=in_use&locationId=5&keeperPayrollNumber=EMP123
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/middleware/authMiddleware";
-import { UniqueAssetService } from "@/services/tracking-and-movement/uniqueAssetAssignmentService";
+import { UniqueAssetService } from "@/services/tracking/uniqueAssetAssignmentService";
 
 export const GET = withAuth(async (req: NextRequest) => {
   try {

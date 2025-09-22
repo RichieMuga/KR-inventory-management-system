@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/middleware/authMiddleware";
-import { BulkAssetService } from "@/services/tracking-and-movement/bulkAssetAssignmentService";
+import { BulkAssetService } from "@/services/tracking/bulkAssetAssignmentService";
 
 // GET /api/bulk-asset-tracking/[assetId]
 // Get detailed information for a single bulk asset

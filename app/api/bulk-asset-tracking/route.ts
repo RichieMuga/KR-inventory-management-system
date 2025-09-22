@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/middleware/authMiddleware";
-import { BulkAssetService } from "@/services/tracking-and-movement/bulkAssetAssignmentService";
+import { BulkAssetService } from "@/services/tracking/bulkAssetAssignmentService";
 
 // GET /api/bulk-asset-tracking?page=1&limit=10&search=laptop&status=active&locationId=1&lowStockOnly=true
 // Fetch paginated bulk assets with search and filtering capabilities
