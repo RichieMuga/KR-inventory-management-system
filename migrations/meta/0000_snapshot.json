@@ -1,5 +1,5 @@
 {
-  "id": "af691c7b-278a-4ef9-88d2-9aab34603420",
+  "id": "261d66e6-e3d6-4431-be83-59d08a07fac3",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -59,6 +59,26 @@
           "primaryKey": false,
           "notNull": true,
           "default": 1
+        },
+        "date_returned": {
+          "name": "date_returned",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "condition_returned": {
+          "name": "condition_returned",
+          "type": "condition",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quantity_returned": {
+          "name": "quantity_returned",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
         }
       },
       "indexes": {},
@@ -135,7 +155,7 @@
           "name": "to_location_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "moved_by": {
           "name": "moved_by",
@@ -210,7 +230,7 @@
           "columnsTo": [
             "location_id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "asset_movement_moved_by_users_payroll_number_fk": {
@@ -540,6 +560,12 @@
           "notNull": true,
           "default": true
         },
+        "default_location_id": {
+          "name": "default_location_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -556,7 +582,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "users_default_location_id_locations_location_id_fk": {
+          "name": "users_default_location_id_locations_location_id_fk",
+          "tableFrom": "users",
+          "tableTo": "locations",
+          "columnsFrom": [
+            "default_location_id"
+          ],
+          "columnsTo": [
+            "location_id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

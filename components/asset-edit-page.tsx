@@ -1,8 +1,8 @@
 "use client";
 
-import type React from "react";
-
-import { useState } from "react";
+import React from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -28,208 +28,206 @@ import {
   Building,
   FileText,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { api } from "@/lib/api/axiosInterceptor";
 
 interface EditAssetPageProps {
   assetId: string;
 }
 
-// Mock data for dropdowns
-const mockLocations = [
-  {
-    locationId: "LOC-001",
-    departmentName: "IT Store Room A",
-    regionName: "Nairobi Central",
-  },
-  {
-    locationId: "LOC-002",
-    departmentName: "IT Store Room B",
-    regionName: "Nairobi Central",
-  },
-  {
-    locationId: "LOC-003",
-    departmentName: "Conference Room 1",
-    regionName: "Mombasa North",
-  },
-  {
-    locationId: "LOC-004",
-    departmentName: "Server Room 1",
-    regionName: "Kisumu East",
-  },
-  {
-    locationId: "LOC-005",
-    departmentName: "Main Warehouse",
-    regionName: "Nairobi Central",
-  },
-];
+interface FormData {
+  quantity: number;
+  minimumThreshold: number;
+  keeperPayrollNumber: string;
+  locationId: number;
+  modelNumber: string;
+  notes: string;
+}
 
-const mockKeepers = [
-  {
-    payrollNumber: "EMP-001",
-    firstname: "John",
-    lastname: "Doe",
-    role: "IT Administrator",
-  },
-  {
-    payrollNumber: "EMP-002",
-    firstname: "Jane",
-    lastname: "Smith",
-    role: "IT Support",
-  },
-  {
-    payrollNumber: "EMP-003",
-    firstname: "Peter",
-    lastname: "Jones",
-    role: "Store Manager",
-  },
-  {
-    payrollNumber: "EMP-004",
-    firstname: "Alice",
-    lastname: "Brown",
-    role: "IT Technician",
-  },
-  {
-    payrollNumber: "EMP-005",
-    firstname: "David",
-    lastname: "Green",
-    role: "System Administrator",
-  },
-];
+interface Location {
+  locationId: number;
+  regionName: string;
+  departmentName: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
-const availabilityOptions = [
-  { value: "Available", label: "Available" },
-  { value: "Assigned", label: "Assigned" },
-  { value: "In Repair", label: "In Repair" },
-  { value: "Disposed", label: "Disposed" },
-];
+interface User {
+  payrollNumber: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  mustChangePassword: boolean;
+  defaultLocationId: number | null;
+  createdAt: string;
+  updatedAt: string;
+  defaultLocation?: {
+    locationId: number;
+    departmentName: string;
+    regionName: string;
+    notes: string;
+  };
+}
 
-const regionOptions = [
-  { value: "Nairobi", label: "Nairobi" },
-  { value: "Mombasa", label: "Mombasa" },
-  { value: "Kisumu", label: "Kisumu" },
-  { value: "Nakuru", label: "Nakuru" },
-  { value: "Eldoret", label: "Eldoret" },
-];
+interface Asset {
+  assetId: number;
+  name: string;
+  keeperPayrollNumber: string;
+  locationId: number;
+  serialNumber: string | null;
+  isBulk: boolean;
+  individualStatus: string | null;
+  bulkStatus: string;
+  currentStockLevel: number;
+  minimumThreshold: number;
+  lastRestocked: string;
+  modelNumber: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export function EditAssetPage({ assetId }: EditAssetPageProps) {
-  // Form state - pre-filled with existing data
-  const [formData, setFormData] = useState({
-    assetId: "AST-001",
-    name: "HP Toner Cartridge (Black)",
-    serialNumber: "HP-TNR-BLK-001",
-    region: "Nairobi",
-    keeperPayrollNumber: "EMP-001",
-    availability: "Available",
-    locationId: "LOC-001",
-    isBulk: true,
-    quantity: 25,
+  const queryClient = useQueryClient();
+
+  // Fetch locations
+  const { data: locationsData, isLoading: locationsLoading } = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const response = await api.get('/locations');
+      return response.data;
+    }
   });
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-
-  // Get current keeper and location details
-  const currentKeeper = mockKeepers.find(
-    (k) => k.payrollNumber === formData.keeperPayrollNumber,
-  );
-  const currentLocation = mockLocations.find(
-    (l) => l.locationId === formData.locationId,
-  );
-
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = "Asset name is required";
+  // Fetch users
+  const { data: usersData, isLoading: usersLoading } = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const response = await api.get('/users');
+      return response.data;
     }
+  });
 
-    if (!formData.serialNumber.trim()) {
-      newErrors.serialNumber = "Serial number is required";
+  // Fetch current asset data
+  const { data: assetData, isLoading: assetLoading } = useQuery({
+    queryKey: ['asset', assetId],
+    queryFn: async () => {
+      const response = await api.get(`/view-bulk-asset/${assetId}`);
+      return response.data;
     }
+  });
 
-    if (!formData.region) {
-      newErrors.region = "Region is required";
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    setValue,
+    watch,
+    reset
+  } = useForm<FormData>();
+
+  // Set form default values when asset data is loaded
+  React.useEffect(() => {
+    if (assetData) {
+      reset({
+        quantity: assetData.currentStockLevel || 0,
+        minimumThreshold: assetData.minimumThreshold || 0,
+        keeperPayrollNumber: assetData.keeperPayrollNumber || '',
+        locationId: assetData.locationId || 0,
+        modelNumber: assetData.modelNumber || '',
+        notes: assetData.notes || ''
+      });
     }
+  }, [assetData, reset]);
 
-    if (!formData.keeperPayrollNumber) {
-      newErrors.keeperPayrollNumber = "Keeper is required";
+  // Watch form values for real-time updates
+  const watchedValues = watch();
+
+  // Mutation for updating asset
+  const updateAssetMutation = useMutation({
+    mutationFn: async (data: FormData) => {
+      const response = await api.patch(`/edit-bulk-asset/${assetId}`, data);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      // Invalidate and refetch asset data
+      queryClient.invalidateQueries({ queryKey: ['asset', assetId] });
+      // Show success message or redirect
+      console.log('Asset updated successfully:', data);
+    },
+    onError: (error) => {
+      console.error('Error updating asset:', error);
     }
+  });
 
-    if (!formData.availability) {
-      newErrors.availability = "Availability status is required";
-    }
-
-    if (!formData.locationId) {
-      newErrors.locationId = "Location is required";
-    }
-
-    if (formData.isBulk && (!formData.quantity || formData.quantity <= 0)) {
-      newErrors.quantity = "Quantity must be greater than 0 for bulk assets";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      console.log("Updated asset data:", formData);
-      setShowSuccess(true);
-
-      // Hide success message after 3 seconds
-      setTimeout(() => setShowSuccess(false), 3000);
-    } catch (error) {
-      console.error("Error updating asset:", error);
-    } finally {
-      setIsSubmitting(false);
-    }
+  const onSubmit = (data: FormData) => {
+    updateAssetMutation.mutate(data);
   };
 
   const handleCancel = () => {
-    console.log("Cancel edit");
-    // TODO: Navigate back or show confirmation dialog
-  };
-
-  const handleGoBack = () => {
-    console.log("Go back to asset view");
-    // TODO: Navigate back to asset view page
-  };
-
-  const updateFormData = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error for this field when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: "" }));
+    // Reset form to original values
+    if (assetData) {
+      reset({
+        quantity: assetData.currentStockLevel || 0,
+        minimumThreshold: assetData.minimumThreshold || 0,
+        keeperPayrollNumber: assetData.keeperPayrollNumber || '',
+        locationId: assetData.locationId || 0,
+        modelNumber: assetData.modelNumber || '',
+        notes: assetData.notes || ''
+      });
     }
   };
 
-  const getAvailabilityColor = (availability: string) => {
-    switch (availability) {
-      case "Available":
+  const handleGoBack = () => {
+    // Navigate back to asset view
+    window.history.back();
+  };
+
+  // Get current keeper and location details
+  const currentKeeper = usersData?.data?.find(
+    (user: User) => user.payrollNumber === watchedValues.keeperPayrollNumber
+  );
+  const currentLocation = locationsData?.data?.find(
+    (location: Location) => location.locationId === watchedValues.locationId
+  );
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "active":
         return "bg-green-100 text-green-800";
-      case "Assigned":
-        return "bg-orange-100 text-orange-800";
-      case "In Repair":
+      case "inactive":
+        return "bg-gray-100 text-gray-800";
+      case "maintenance":
         return "bg-yellow-100 text-yellow-800";
-      case "Disposed":
-        return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
+
+  if (assetLoading || locationsLoading || usersLoading) {
+    return (
+      <div className="container mx-auto p-4 md:p-6 max-w-4xl">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading asset data...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!assetData) {
+    return (
+      <div className="container mx-auto p-4 md:p-6 max-w-4xl">
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>Asset not found</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-4xl">
@@ -245,32 +243,42 @@ export function EditAssetPage({ assetId }: EditAssetPageProps) {
               Edit Asset
             </h1>
             <p className="text-muted-foreground">
-              Asset ID: {formData.assetId}
+              Asset ID: {assetData.assetId}
             </p>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleCancel}>
+          <Button variant="outline" onClick={handleCancel} type="button">
             <X className="h-4 w-4 mr-2" />
             Cancel
           </Button>
           <Button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
+            onClick={handleSubmit(onSubmit)}
+            disabled={isSubmitting || updateAssetMutation.isPending}
             className="bg-kr-maroon hover:bg-kr-maroon-dark"
           >
             <Save className="h-4 w-4 mr-2" />
-            {isSubmitting ? "Saving..." : "Save Changes"}
+            {isSubmitting || updateAssetMutation.isPending ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </div>
 
       {/* Success Alert */}
-      {showSuccess && (
+      {updateAssetMutation.isSuccess && (
         <Alert className="mb-6 border-green-200 bg-green-50">
           <AlertCircle className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800">
             Asset updated successfully!
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Error Alert */}
+      {updateAssetMutation.isError && (
+        <Alert className="mb-6 border-red-200 bg-red-50">
+          <AlertCircle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800">
+            Failed to update asset. Please try again.
           </AlertDescription>
         </Alert>
       )}
@@ -280,30 +288,28 @@ export function EditAssetPage({ assetId }: EditAssetPageProps) {
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-medium">{formData.name}</h3>
+              <h3 className="font-medium">{assetData.name}</h3>
               <p className="text-sm text-muted-foreground">
-                {currentLocation?.departmentName} • {currentKeeper?.firstname}{" "}
-                {currentKeeper?.lastname}
+                {currentLocation?.departmentName} • {currentKeeper?.firstName}{" "}
+                {currentKeeper?.lastName}
               </p>
             </div>
             <Badge
-              className={`${getAvailabilityColor(formData.availability)} px-2 py-1 rounded-full text-xs`}
+              className={`${getStatusColor(assetData.bulkStatus)} px-2 py-1 rounded-full text-xs`}
             >
-              {formData.availability}
+              {assetData.bulkStatus}
             </Badge>
           </div>
         </CardContent>
       </Card>
 
       {/* Edit Form */}
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit(onSubmit)}>
         <Tabs defaultValue="basic" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="basic">Basic Information</TabsTrigger>
             <TabsTrigger value="location">Location & Keeper</TabsTrigger>
-            {formData.isBulk && (
-              <TabsTrigger value="stock">Stock Details</TabsTrigger>
-            )}
+            <TabsTrigger value="stock">Stock Details</TabsTrigger>
           </TabsList>
 
           {/* Basic Information Tab */}
@@ -318,104 +324,53 @@ export function EditAssetPage({ assetId }: EditAssetPageProps) {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Asset Name *</Label>
+                    <Label>Asset Name</Label>
                     <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => updateFormData("name", e.target.value)}
-                      placeholder="Enter asset name"
-                      className={errors.name ? "border-red-500" : ""}
+                      value={assetData.name}
+                      disabled
+                      className="bg-gray-50"
                     />
-                    {errors.name && (
-                      <p className="text-sm text-red-500">{errors.name}</p>
-                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Asset name cannot be changed
+                    </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="serialNumber">Serial Number *</Label>
+                    <Label htmlFor="modelNumber">Model Number</Label>
                     <Input
-                      id="serialNumber"
-                      value={formData.serialNumber}
-                      onChange={(e) =>
-                        updateFormData("serialNumber", e.target.value)
-                      }
-                      placeholder="Enter serial number"
-                      className={errors.serialNumber ? "border-red-500" : ""}
+                      id="modelNumber"
+                      {...register("modelNumber")}
+                      placeholder="Enter model number"
                     />
-                    {errors.serialNumber && (
-                      <p className="text-sm text-red-500">
-                        {errors.serialNumber}
-                      </p>
-                    )}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="region">Region *</Label>
-                    <Select
-                      value={formData.region}
-                      onValueChange={(value) => updateFormData("region", value)}
-                    >
-                      <SelectTrigger
-                        className={errors.region ? "border-red-500" : ""}
-                      >
-                        <SelectValue placeholder="Select region" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {regionOptions.map((region) => (
-                          <SelectItem key={region.value} value={region.value}>
-                            {region.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.region && (
-                      <p className="text-sm text-red-500">{errors.region}</p>
-                    )}
+                    <Label>Serial Number</Label>
+                    <Input
+                      value={assetData.serialNumber || 'N/A'}
+                      disabled
+                      className="bg-gray-50"
+                    />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="availability">Availability Status *</Label>
-                    <Select
-                      value={formData.availability}
-                      onValueChange={(value) =>
-                        updateFormData("availability", value)
-                      }
-                    >
-                      <SelectTrigger
-                        className={errors.availability ? "border-red-500" : ""}
-                      >
-                        <SelectValue placeholder="Select availability" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availabilityOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.availability && (
-                      <p className="text-sm text-red-500">
-                        {errors.availability}
-                      </p>
-                    )}
+                    <Label>Asset Type</Label>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <Badge className="bg-blue-100 text-blue-800">
+                        {assetData.isBulk ? 'Bulk Asset' : 'Individual Asset'}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
 
-                <Separator />
-
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="isBulk"
-                    checked={formData.isBulk}
-                    onCheckedChange={(checked) =>
-                      updateFormData("isBulk", checked)
-                    }
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea
+                    id="notes"
+                    {...register("notes")}
+                    placeholder="Add any additional notes about this asset"
+                    rows={3}
                   />
-                  <Label htmlFor="isBulk" className="flex items-center gap-2">
-                    <Package className="h-4 w-4" />
-                    This is a bulk asset (has quantity)
-                  </Label>
                 </div>
               </CardContent>
             </Card>
@@ -434,23 +389,19 @@ export function EditAssetPage({ assetId }: EditAssetPageProps) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="location">Location *</Label>
+                    <Label htmlFor="locationId">Location *</Label>
                     <Select
-                      value={formData.locationId}
-                      onValueChange={(value) =>
-                        updateFormData("locationId", value)
-                      }
+                      value={watchedValues.locationId?.toString()}
+                      onValueChange={(value) => setValue("locationId", parseInt(value))}
                     >
-                      <SelectTrigger
-                        className={errors.locationId ? "border-red-500" : ""}
-                      >
+                      <SelectTrigger>
                         <SelectValue placeholder="Select location" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockLocations.map((location) => (
+                        {locationsData?.data?.map((location: Location) => (
                           <SelectItem
                             key={location.locationId}
-                            value={location.locationId}
+                            value={location.locationId.toString()}
                           >
                             <div>
                               <div className="font-medium">
@@ -464,11 +415,6 @@ export function EditAssetPage({ assetId }: EditAssetPageProps) {
                         ))}
                       </SelectContent>
                     </Select>
-                    {errors.locationId && (
-                      <p className="text-sm text-red-500">
-                        {errors.locationId}
-                      </p>
-                    )}
                   </div>
 
                   {currentLocation && (
@@ -498,43 +444,32 @@ export function EditAssetPage({ assetId }: EditAssetPageProps) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="keeper">Asset Keeper *</Label>
+                    <Label htmlFor="keeperPayrollNumber">Asset Keeper *</Label>
                     <Select
-                      value={formData.keeperPayrollNumber}
-                      onValueChange={(value) =>
-                        updateFormData("keeperPayrollNumber", value)
-                      }
+                      value={watchedValues.keeperPayrollNumber}
+                      onValueChange={(value) => setValue("keeperPayrollNumber", value)}
                     >
-                      <SelectTrigger
-                        className={
-                          errors.keeperPayrollNumber ? "border-red-500" : ""
-                        }
-                      >
+                      <SelectTrigger>
                         <SelectValue placeholder="Select keeper" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockKeepers.map((keeper) => (
+                        {usersData?.data?.map((user: User) => (
                           <SelectItem
-                            key={keeper.payrollNumber}
-                            value={keeper.payrollNumber}
+                            key={user.payrollNumber}
+                            value={user.payrollNumber}
                           >
                             <div>
                               <div className="font-medium">
-                                {keeper.firstname} {keeper.lastname}
+                                {user.firstName} {user.lastName}
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                {keeper.role} • {keeper.payrollNumber}
+                                {user.role} • {user.payrollNumber}
                               </div>
                             </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {errors.keeperPayrollNumber && (
-                      <p className="text-sm text-red-500">
-                        {errors.keeperPayrollNumber}
-                      </p>
-                    )}
                   </div>
 
                   {currentKeeper && (
@@ -544,7 +479,7 @@ export function EditAssetPage({ assetId }: EditAssetPageProps) {
                         <span className="font-medium">Current Keeper</span>
                       </div>
                       <p className="text-sm">
-                        {currentKeeper.firstname} {currentKeeper.lastname}
+                        {currentKeeper.firstName} {currentKeeper.lastName}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {currentKeeper.role} • {currentKeeper.payrollNumber}
@@ -556,65 +491,85 @@ export function EditAssetPage({ assetId }: EditAssetPageProps) {
             </div>
           </TabsContent>
 
-          {/* Stock Details Tab (only for bulk assets) */}
-          {formData.isBulk && (
-            <TabsContent value="stock" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Package className="h-5 w-5" />
-                    Stock Information
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="quantity">Current Quantity *</Label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        min="0"
-                        value={formData.quantity}
-                        onChange={(e) =>
-                          updateFormData(
-                            "quantity",
-                            Number.parseInt(e.target.value) || 0,
-                          )
-                        }
-                        placeholder="Enter quantity"
-                        className={errors.quantity ? "border-red-500" : ""}
-                      />
-                      {errors.quantity && (
-                        <p className="text-sm text-red-500">
-                          {errors.quantity}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Asset Type</Label>
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <Badge className="bg-blue-100 text-blue-800">
-                          Bulk Asset
-                        </Badge>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          This asset is tracked by quantity
-                        </p>
-                      </div>
-                    </div>
+          {/* Stock Details Tab */}
+          <TabsContent value="stock" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Stock Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity">Current Quantity *</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      min="0"
+                      {...register("quantity", { 
+                        required: "Quantity is required",
+                        valueAsNumber: true,
+                        min: { value: 0, message: "Quantity must be 0 or greater" }
+                      })}
+                      placeholder="Enter quantity"
+                      className={errors.quantity ? "border-red-500" : ""}
+                    />
+                    {errors.quantity && (
+                      <p className="text-sm text-red-500">
+                        {errors.quantity.message}
+                      </p>
+                    )}
                   </div>
 
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Changing the quantity will create a new inventory movement
-                      record. Make sure to document the reason for the change.
-                    </AlertDescription>
-                  </Alert>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
+                  <div className="space-y-2">
+                    <Label htmlFor="minimumThreshold">Minimum Threshold</Label>
+                    <Input
+                      id="minimumThreshold"
+                      type="number"
+                      min="0"
+                      {...register("minimumThreshold", { 
+                        valueAsNumber: true,
+                        min: { value: 0, message: "Threshold must be 0 or greater" }
+                      })}
+                      placeholder="Enter minimum threshold"
+                      className={errors.minimumThreshold ? "border-red-500" : ""}
+                    />
+                    {errors.minimumThreshold && (
+                      <p className="text-sm text-red-500">
+                        {errors.minimumThreshold.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium text-blue-900 mb-2">Current Stock Status</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-blue-700">Current Level:</span>
+                      <span className="ml-2 font-medium">{assetData.currentStockLevel}</span>
+                    </div>
+                    <div>
+                      <span className="text-blue-700">Last Restocked:</span>
+                      <span className="ml-2 font-medium">
+                        {new Date(assetData.lastRestocked).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Changing the quantity will create a new inventory movement record. 
+                    Make sure to document the reason for the change in the notes section.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
 
         {/* Form Actions */}
@@ -625,11 +580,14 @@ export function EditAssetPage({ assetId }: EditAssetPageProps) {
           </Button>
           <Button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || updateAssetMutation.isPending}
             className="bg-kr-maroon hover:bg-kr-maroon-dark"
           >
+            {(isSubmitting || updateAssetMutation.isPending) && (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            )}
             <Save className="h-4 w-4 mr-2" />
-            {isSubmitting ? "Saving..." : "Save Changes"}
+            {isSubmitting || updateAssetMutation.isPending ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </form>

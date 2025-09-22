@@ -159,9 +159,10 @@ export const assetMovement = pgTable("asset_movement", {
     () => locations.locationId,
     { onDelete: "set null" },
   ),
-  toLocationId: integer("to_location_id")
-    .notNull()
-    .references(() => locations.locationId, { onDelete: "cascade" }),
+  toLocationId: integer("to_location_id").references(
+    () => locations.locationId, 
+    { onDelete: "set null" }
+  ),
   movedBy: varchar("moved_by", { length: 50 })
     .notNull()
     .references(() => users.payrollNumber, { onDelete: "set null" }),

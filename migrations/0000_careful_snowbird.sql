@@ -11,14 +11,17 @@ CREATE TABLE "asset_assignment" (
 	"date_issued" timestamp DEFAULT now() NOT NULL,
 	"condition_issued" "condition" DEFAULT 'good' NOT NULL,
 	"notes" text,
-	"quantity" integer DEFAULT 1 NOT NULL
+	"quantity" integer DEFAULT 1 NOT NULL,
+	"date_returned" timestamp,
+	"condition_returned" "condition",
+	"quantity_returned" integer DEFAULT 0
 );
 --> statement-breakpoint
 CREATE TABLE "asset_movement" (
 	"movement_id" serial PRIMARY KEY NOT NULL,
 	"asset_id" integer NOT NULL,
 	"from_location_id" integer,
-	"to_location_id" integer NOT NULL,
+	"to_location_id" integer,
 	"moved_by" varchar(50) NOT NULL,
 	"movement_type" "movement_type" DEFAULT 'transfer' NOT NULL,
 	"quantity" integer DEFAULT 1 NOT NULL,
@@ -69,6 +72,7 @@ CREATE TABLE "users" (
 	"role" "user_role" DEFAULT 'viewer' NOT NULL,
 	"password" varchar(255) NOT NULL,
 	"must_change_password" boolean DEFAULT true NOT NULL,
+	"default_location_id" integer,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
@@ -78,9 +82,10 @@ ALTER TABLE "asset_assignment" ADD CONSTRAINT "asset_assignment_assigned_to_user
 ALTER TABLE "asset_assignment" ADD CONSTRAINT "asset_assignment_assigned_by_users_payroll_number_fk" FOREIGN KEY ("assigned_by") REFERENCES "public"."users"("payroll_number") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "asset_movement" ADD CONSTRAINT "asset_movement_asset_id_assets_asset_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."assets"("asset_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "asset_movement" ADD CONSTRAINT "asset_movement_from_location_id_locations_location_id_fk" FOREIGN KEY ("from_location_id") REFERENCES "public"."locations"("location_id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "asset_movement" ADD CONSTRAINT "asset_movement_to_location_id_locations_location_id_fk" FOREIGN KEY ("to_location_id") REFERENCES "public"."locations"("location_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "asset_movement" ADD CONSTRAINT "asset_movement_to_location_id_locations_location_id_fk" FOREIGN KEY ("to_location_id") REFERENCES "public"."locations"("location_id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "asset_movement" ADD CONSTRAINT "asset_movement_moved_by_users_payroll_number_fk" FOREIGN KEY ("moved_by") REFERENCES "public"."users"("payroll_number") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "assets" ADD CONSTRAINT "assets_keeper_payroll_number_users_payroll_number_fk" FOREIGN KEY ("keeper_payroll_number") REFERENCES "public"."users"("payroll_number") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "assets" ADD CONSTRAINT "assets_location_id_locations_location_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("location_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "restock_log" ADD CONSTRAINT "restock_log_asset_id_assets_asset_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."assets"("asset_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "restock_log" ADD CONSTRAINT "restock_log_restocked_by_users_payroll_number_fk" FOREIGN KEY ("restocked_by") REFERENCES "public"."users"("payroll_number") ON DELETE set null ON UPDATE no action;
+ALTER TABLE "restock_log" ADD CONSTRAINT "restock_log_restocked_by_users_payroll_number_fk" FOREIGN KEY ("restocked_by") REFERENCES "public"."users"("payroll_number") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_default_location_id_locations_location_id_fk" FOREIGN KEY ("default_location_id") REFERENCES "public"."locations"("location_id") ON DELETE set null ON UPDATE no action;
