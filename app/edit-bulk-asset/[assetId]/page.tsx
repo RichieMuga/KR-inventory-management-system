@@ -1,11 +1,17 @@
 import { EditAssetPage } from "@/components/asset-edit-page";
 
 interface PageProps {
-  params: {
-    id: string;
-  };
+  params: Promise<{
+    assetId: string
+  }>
 }
 
-export default function AssetEditPage({ params }: PageProps) {
-  return <EditAssetPage assetId={params.id} />;
+export default async function AssetEditPage({ params }: PageProps) {
+   const { assetId } = await params;
+  
+  if (!assetId) {
+    return <div>Error: No asset ID found</div>;
+  }
+
+  return <EditAssetPage assetId={assetId}/>
 }
