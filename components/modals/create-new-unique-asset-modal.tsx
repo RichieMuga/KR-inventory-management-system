@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Save, Loader2, Search } from "lucide-react";
+import { Save, Loader2, Search, ChevronDown } from "lucide-react";
 import { api } from "@/lib/api/axiosInterceptor";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +41,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { toggleUniqueModal } from "@/lib/features/modals/asset-modal-buttons";
 import { RootState } from "@/lib/store";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface UniqueAssetFormData {
   name: string;
@@ -51,11 +64,11 @@ interface User {
   payrollNumber: string;
   firstName: string;
   lastName: string;
-  email: string;
+  email?: string;
 }
 
 interface ApiResponse<T> {
-  success: boolean;
+  success?: boolean;
   data: T[];
   pagination?: {
     currentPage: number;
@@ -66,13 +79,17 @@ interface ApiResponse<T> {
     hasPreviousPage: boolean;
   };
   search?: string;
+  page?: number;
+  limit?: number;
+  total?: string | number;
+  totalPages?: number;
 }
 
 const individualStatusOptions = [
-  "not_in_use",
-  "in_use",
-  "under_repair",
-  "disposed",
+  { value: "not_in_use", label: "Not in use" },
+  { value: "in_use", label: "In use" },
+  { value: "under_repair", label: "Under repair" },
+  { value: "disposed", label: "Disposed" },
 ];
 
 // API functions
@@ -105,6 +122,89 @@ const createUniqueAsset = async (data: UniqueAssetFormData) => {
   return response.data;
 };
 
+// Custom searchable select components
+interface SearchableSelectProps {
+  value: string;
+  onValueChange: (value: string) => void;
+  placeholder: string;
+  searchPlaceholder: string;
+  options: Array<{ value: string; label: string }>;
+  isLoading: boolean;
+  onSearch: (value: string) => void;
+  searchValue: string;
+  error?: boolean;
+  emptyText?: string;
+}
+
+function SearchableSelect({
+  value,
+  onValueChange,
+  placeholder,
+  searchPlaceholder,
+  options,
+  isLoading,
+  onSearch,
+  searchValue,
+  error,
+  emptyText = "No options found",
+}: SearchableSelectProps) {
+  const [open, setOpen] = useState(false);
+  
+  const selectedOption = options.find(option => option.value === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "w-full justify-between",
+            error && "border-red-500",
+            !value && "text-muted-foreground"
+          )}
+        >
+          {selectedOption ? selectedOption.label : placeholder}
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder={searchPlaceholder}
+            value={searchValue}
+            onValueChange={onSearch}
+          />
+          <CommandEmpty>
+            {isLoading ? (
+              <div className="flex items-center justify-center p-4">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+            ) : (
+              emptyText
+            )}
+          </CommandEmpty>
+          <CommandGroup className="max-h-64 overflow-auto">
+            {options.map((option) => (
+              <CommandItem
+                key={option.value}
+                value={option.value}
+                onSelect={() => {
+                  onValueChange(option.value);
+                  setOpen(false);
+                }}
+              >
+                {option.label}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function UniqueAssetModal() {
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
@@ -119,7 +219,6 @@ export default function UniqueAssetModal() {
     control,
     handleSubmit,
     reset,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<UniqueAssetFormData>({
     defaultValues: {
@@ -133,19 +232,45 @@ export default function UniqueAssetModal() {
     },
   });
 
-  // Fetch locations
+  // Fetch locations with debouncing
   const { data: locationsData, isLoading: locationsLoading } = useQuery({
     queryKey: ["locations", locationSearch],
     queryFn: () => fetchLocations(locationSearch),
     enabled: isUniqueAssetModalOpen,
+    staleTime: 5000,
   });
 
-  // Fetch users
+  // Fetch users with debouncing
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ["users", userSearch],
     queryFn: () => fetchUsers(userSearch),
     enabled: isUniqueAssetModalOpen,
+    staleTime: 5000,
   });
+
+  // Memoized options for selects
+  const locationOptions = useMemo(() => {
+    return locationsData?.data?.map(location => ({
+      value: location.locationId.toString(),
+      label: `${location.departmentName} - ${location.regionName}`
+    })) || [];
+  }, [locationsData]);
+
+  const userOptions = useMemo(() => {
+    return usersData?.data?.map(user => ({
+      value: user.payrollNumber,
+      label: `${user.firstName} ${user.lastName} (${user.payrollNumber})`
+    })) || [];
+  }, [usersData]);
+
+  // Debounced search handlers
+  const handleLocationSearch = useCallback((value: string) => {
+    setLocationSearch(value);
+  }, []);
+
+  const handleUserSearch = useCallback((value: string) => {
+    setUserSearch(value);
+  }, []);
 
   // Create asset mutation
   const createAssetMutation = useMutation({
@@ -273,48 +398,18 @@ export default function UniqueAssetModal() {
                       control={control}
                       rules={{ required: "Location is required" }}
                       render={({ field: { onChange, value } }) => (
-                        <Select
+                        <SearchableSelect
                           value={value?.toString() || ""}
                           onValueChange={(val) => onChange(parseInt(val))}
-                        >
-                          <SelectTrigger
-                            className={
-                              errors.locationId ? "border-red-500" : ""
-                            }
-                          >
-                            <SelectValue placeholder="Select location" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <div className="p-2">
-                              <div className="flex items-center space-x-2">
-                                <Search className="h-4 w-4 text-gray-400" />
-                                <Input
-                                  placeholder="Search locations..."
-                                  value={locationSearch}
-                                  onChange={(e) =>
-                                    setLocationSearch(e.target.value)
-                                  }
-                                  className="h-8"
-                                />
-                              </div>
-                            </div>
-                            {locationsLoading ? (
-                              <div className="flex items-center justify-center p-4">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              </div>
-                            ) : (
-                              locationsData?.data?.map((location) => (
-                                <SelectItem
-                                  key={location.locationId}
-                                  value={location.locationId.toString()}
-                                >
-                                  {location.departmentName} -{" "}
-                                  {location.regionName}
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
+                          placeholder="Select location"
+                          searchPlaceholder="Search locations..."
+                          options={locationOptions}
+                          isLoading={locationsLoading}
+                          onSearch={handleLocationSearch}
+                          searchValue={locationSearch}
+                          error={!!errors.locationId}
+                          emptyText="No locations found"
+                        />
                       )}
                     />
                     {errors.locationId && (
@@ -341,8 +436,8 @@ export default function UniqueAssetModal() {
                           </SelectTrigger>
                           <SelectContent>
                             {individualStatusOptions.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option.replace("_", " ")}
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -362,46 +457,18 @@ export default function UniqueAssetModal() {
                     control={control}
                     rules={{ required: "Keeper is required" }}
                     render={({ field }) => (
-                      <Select
+                      <SearchableSelect
                         value={field.value}
                         onValueChange={field.onChange}
-                      >
-                        <SelectTrigger
-                          className={
-                            errors.keeperPayrollNumber ? "border-red-500" : ""
-                          }
-                        >
-                          <SelectValue placeholder="Select keeper" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <div className="p-2">
-                            <div className="flex items-center space-x-2">
-                              <Search className="h-4 w-4 text-gray-400" />
-                              <Input
-                                placeholder="Search users..."
-                                value={userSearch}
-                                onChange={(e) => setUserSearch(e.target.value)}
-                                className="h-8"
-                              />
-                            </div>
-                          </div>
-                          {usersLoading ? (
-                            <div className="flex items-center justify-center p-4">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            </div>
-                          ) : (
-                            usersData?.data?.map((user) => (
-                              <SelectItem
-                                key={user.payrollNumber}
-                                value={user.payrollNumber}
-                              >
-                                {user.firstName} {user.lastName} (
-                                {user.payrollNumber})
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                        placeholder="Select keeper"
+                        searchPlaceholder="Search users..."
+                        options={userOptions}
+                        isLoading={usersLoading}
+                        onSearch={handleUserSearch}
+                        searchValue={userSearch}
+                        error={!!errors.keeperPayrollNumber}
+                        emptyText="No users found"
+                      />
                     )}
                   />
                   {errors.keeperPayrollNumber && (
@@ -509,45 +576,18 @@ export default function UniqueAssetModal() {
                   control={control}
                   rules={{ required: "Location is required" }}
                   render={({ field: { onChange, value } }) => (
-                    <Select
+                    <SearchableSelect
                       value={value?.toString() || ""}
                       onValueChange={(val) => onChange(parseInt(val))}
-                    >
-                      <SelectTrigger
-                        className={errors.locationId ? "border-red-500" : ""}
-                      >
-                        <SelectValue placeholder="Select location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <div className="p-2">
-                          <div className="flex items-center space-x-2">
-                            <Search className="h-4 w-4 text-gray-400" />
-                            <Input
-                              placeholder="Search locations..."
-                              value={locationSearch}
-                              onChange={(e) =>
-                                setLocationSearch(e.target.value)
-                              }
-                              className="h-8"
-                            />
-                          </div>
-                        </div>
-                        {locationsLoading ? (
-                          <div className="flex items-center justify-center p-4">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          </div>
-                        ) : (
-                          locationsData?.data?.map((location) => (
-                            <SelectItem
-                              key={location.locationId}
-                              value={location.locationId.toString()}
-                            >
-                              {location.departmentName} - {location.regionName}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                      placeholder="Select location"
+                      searchPlaceholder="Search locations..."
+                      options={locationOptions}
+                      isLoading={locationsLoading}
+                      onSearch={handleLocationSearch}
+                      searchValue={locationSearch}
+                      error={!!errors.locationId}
+                      emptyText="No locations found"
+                    />
                   )}
                 />
                 {errors.locationId && (
@@ -572,8 +612,8 @@ export default function UniqueAssetModal() {
                       </SelectTrigger>
                       <SelectContent>
                         {individualStatusOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option.replace("_", " ")}
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -593,43 +633,18 @@ export default function UniqueAssetModal() {
                 control={control}
                 rules={{ required: "Keeper is required" }}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger
-                      className={
-                        errors.keeperPayrollNumber ? "border-red-500" : ""
-                      }
-                    >
-                      <SelectValue placeholder="Select keeper" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <div className="p-2">
-                        <div className="flex items-center space-x-2">
-                          <Search className="h-4 w-4 text-gray-400" />
-                          <Input
-                            placeholder="Search users..."
-                            value={userSearch}
-                            onChange={(e) => setUserSearch(e.target.value)}
-                            className="h-8"
-                          />
-                        </div>
-                      </div>
-                      {usersLoading ? (
-                        <div className="flex items-center justify-center p-4">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        </div>
-                      ) : (
-                        usersData?.data?.map((user) => (
-                          <SelectItem
-                            key={user.payrollNumber}
-                            value={user.payrollNumber}
-                          >
-                            {user.firstName} {user.lastName} (
-                            {user.payrollNumber})
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    placeholder="Select keeper"
+                    searchPlaceholder="Search users..."
+                    options={userOptions}
+                    isLoading={usersLoading}
+                    onSearch={handleUserSearch}
+                    searchValue={userSearch}
+                    error={!!errors.keeperPayrollNumber}
+                    emptyText="No users found"
+                  />
                 )}
               />
               {errors.keeperPayrollNumber && (

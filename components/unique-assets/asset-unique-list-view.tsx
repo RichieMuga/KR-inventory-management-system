@@ -12,7 +12,7 @@ import { AssetTable } from "./asset-unique-table";
 import { Search, PlusCircle, Loader2 } from "lucide-react";
 import { toggleUniqueModal } from "@/lib/features/modals/asset-modal-buttons";
 import { RootState } from "@/lib/store";
-import UniqueAssetModal from "@/components/modals/unique-asset-modal";
+import UniqueAssetModal from "@/components/modals/create-new-unique-asset-modal";
 import Pagination from "@/components/pagination/pagination";
 import { usePagination } from "@/lib/hooks/usePagination";
 import { api } from "@/lib/api/axiosInterceptor";
