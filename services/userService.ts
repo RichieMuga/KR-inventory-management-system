@@ -103,6 +103,18 @@ export class UserService {
 
     let finalLocationId: number | null = null;
 
+    if (finalLocationId !== null) {
+    const locationExists = await db
+      .select()
+      .from(locations)
+      .where(eq(locations.locationId, finalLocationId))
+      .limit(1);
+      
+    if (locationExists.length === 0) {
+      throw new Error(`Location with ID ${finalLocationId} does not exist`);
+      }
+    }
+
     // Determine which approach to use for location
     if (defaultLocationId !== undefined) {
       // Option 1: Use provided defaultLocationId (can be null)

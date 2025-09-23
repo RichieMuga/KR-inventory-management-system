@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LocationService } from "@/services/locationService";
 import {
-  withKeeperAuth,
   AuthenticatedRequest,
+  withAuth,
 } from "@/middleware/authMiddleware";
 import * as schema from "@/db/schema";
 
@@ -103,5 +103,5 @@ async function createLocation(
 }
 
 // Apply middleware and export
-export const GET = withKeeperAuth(getLocations);
-export const POST = withKeeperAuth(createLocation);
+export const GET = withAuth(getLocations);
+export const POST = withAuth(createLocation);
