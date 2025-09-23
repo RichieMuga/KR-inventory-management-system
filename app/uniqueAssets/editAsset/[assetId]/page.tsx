@@ -1,4 +1,4 @@
-import { EditAssetPage } from "@/components/bulk-asset-view-and-edit-pages/bulk-asset-edit-page";
+import { EditUniqueAssetPage } from "@/components/unique-asset-view-and-edit-pages/edit-unique-asset-page";
 
 interface PageProps {
   params: Promise<{
@@ -13,5 +13,5 @@ export default async function AssetEditPage({ params }: PageProps) {
     return <div>Error: No asset ID found</div>;
   }
 
-  return <EditAssetPage assetId={assetId}/>
+  return <EditUniqueAssetPage assetId={assetId}/>
 }

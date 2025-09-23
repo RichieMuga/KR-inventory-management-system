@@ -27,24 +27,25 @@ export type UpdateUniqueAssetInput = {
   serialNumber?: string;
   modelNumber?: string | null;
   individualStatus?: "in_use" | "not_in_use" | "retired";
-  notes?: string;
+  locationId?: number;
+  notes?: string | null;
 };
 
 export type UniqueAssetFilters = {
   status?: "in_use" | "not_in_use" | "retired";
   locationId?: number;
   keeperPayrollNumber?: string;
-  search?: string; // Added search parameter
+  search?: string;
 };
 
 // Properly extend the inferred Asset type
 export interface AssetWithLocation extends Asset {
-  keeperName: string | null; // Add this computed field
+  keeperName: string | null;
   location?: {
     locationId: number;
     regionName: string;
-    departmentName: string | null; // This can be null from the database
-    notes: string | null; // This can be null from the database
+    departmentName: string | null
+    notes: string | null;
   };
 }
 
@@ -121,6 +122,12 @@ class UniqueAssetBusinessLogic {
     }
     if (data.keeperPayrollNumber !== undefined) {
       updates.keeperPayrollNumber = data.keeperPayrollNumber?.trim() || null;
+    }
+    if (data.locationId !== undefined) {
+      updates.locationId = data.locationId;
+    }
+    if (data.notes !== undefined) {
+      updates.notes = data.notes;
     }
 
     return updates;
@@ -207,15 +214,134 @@ class UniqueAssetDataAccess {
    */
   static async updateUniqueAsset(
     assetId: number,
-    updates: Partial<Asset>,
+    updates: {
+      name?: string;
+      serialNumber?: string;
+      modelNumber?: string | null;
+      individualStatus?: "in_use" | "not_in_use" | "retired";
+      keeperPayrollNumber?: string | null;
+      locationId?: number;
+      notes?: string | null;
+    },
+    updatedBy: string
   ): Promise<Asset> {
-    const [updated] = await db
+  // Add this debug logging at the very beginning
+  console.log('🔍 SERVICE ENTRY: Raw parameters received:');
+  console.log('🔍 SERVICE ENTRY: assetId type:', typeof assetId, 'value:', assetId);
+  console.log('🔍 SERVICE ENTRY: updates type:', typeof updates, 'value:', updates);
+  console.log('🔍 SERVICE ENTRY: updatedBy type:', typeof updatedBy, 'value:', updatedBy);
+  
+  console.log('🔍 SERVICE ENTRY: updates object keys:', Object.keys(updates));
+  console.log('🔍 SERVICE ENTRY: updates.locationId:', updates.locationId);
+  console.log('🔍 SERVICE ENTRY: updates.notes:', updates.notes);
+  
+  // Check if there's some other method being called instead
+  console.log('🔍 SERVICE ENTRY: Method name:', 'updateUniqueAsset');
+  console.log('🔍 SERVICE ENTRY: Stack trace:', new Error().stack);
+    console.log('🔍 SERVICE: updateUniqueAsset CALLED');
+    console.log('🔍 SERVICE PARAMS:', {
+      assetId,
+      updates: JSON.stringify(updates, null, 2),
+      updatedBy
+    });
+    
+    // Get the current asset to check for location changes
+    console.log('🔍 SERVICE: Fetching current asset...');
+    const currentAsset = await db
+      .select()
+      .from(assets)
+      .where(eq(assets.assetId, assetId))
+      .limit(1);
+
+    console.log('🔍 SERVICE: Current asset query result:', currentAsset.length ? 'FOUND' : 'NOT FOUND');
+    
+    if (!currentAsset.length) {
+      console.log('❌ SERVICE: Asset not found for ID:', assetId);
+      throw new Error("Asset not found");
+    }
+
+    console.log('🔍 SERVICE: Current asset data:', JSON.stringify(currentAsset[0], null, 2));
+    
+    // Build the update object for the database
+    const dbUpdates: Partial<Asset> = {
+      updatedAt: new Date()
+    };
+
+    console.log('🔍 SERVICE: Building database updates...');
+    
+    // Map all fields explicitly with logging
+    if (updates.name !== undefined) {
+      dbUpdates.name = updates.name;
+      console.log('🔍 SERVICE: Mapping name:', updates.name);
+    }
+    
+    if (updates.serialNumber !== undefined) {
+      dbUpdates.serialNumber = updates.serialNumber;
+      console.log('🔍 SERVICE: Mapping serialNumber:', updates.serialNumber);
+    }
+    
+    if (updates.modelNumber !== undefined) {
+      dbUpdates.modelNumber = updates.modelNumber;
+      console.log('🔍 SERVICE: Mapping modelNumber:', updates.modelNumber);
+    }
+    
+    if (updates.individualStatus !== undefined) {
+      dbUpdates.individualStatus = updates.individualStatus;
+      console.log('🔍 SERVICE: Mapping individualStatus:', updates.individualStatus);
+    }
+    
+    if (updates.keeperPayrollNumber !== undefined) {
+      dbUpdates.keeperPayrollNumber = updates.keeperPayrollNumber;
+      console.log('🔍 SERVICE: Mapping keeperPayrollNumber:', updates.keeperPayrollNumber);
+    }
+    
+    // CRITICAL: Make sure these are included
+    if (updates.locationId !== undefined) {
+      console.log('🔍 SERVICE: Mapping locationId:', updates.locationId);
+      dbUpdates.locationId = updates.locationId;
+    }
+    
+    if (updates.notes !== undefined) {
+      console.log('🔍 SERVICE: Mapping notes:', updates.notes);
+      dbUpdates.notes = updates.notes;
+    }
+    
+    console.log('🔍 SERVICE: Final DB updates object:', JSON.stringify(dbUpdates, null, 2));
+    
+    // Update the asset
+    console.log('🔍 SERVICE: Executing database update...');
+    const [updatedAsset] = await db
       .update(assets)
-      .set(updates)
+      .set(dbUpdates)
       .where(eq(assets.assetId, assetId))
       .returning();
 
-    return updated;
+    console.log('🔍 SERVICE: Database update completed');
+    console.log('🔍 SERVICE: Returned updated asset:', JSON.stringify(updatedAsset, null, 2));
+
+    // Handle location change tracking if locationId changed
+    if (updates.locationId !== undefined && updates.locationId !== currentAsset[0].locationId) {
+      console.log('🔍 SERVICE: Location changed detected, creating movement record...');
+      console.log('🔍 SERVICE: Location change - from:', currentAsset[0].locationId, 'to:', updates.locationId);
+      
+      // Create asset movement record
+      await db.insert(assetMovement).values({
+        assetId: assetId,
+        fromLocationId: currentAsset[0].locationId,
+        toLocationId: updates.locationId,
+        movedBy: updatedBy,
+        movementType: "assignment",
+        quantity: 1,
+        notes: `Asset location changed from ${currentAsset[0].locationId} to ${updates.locationId}`
+      });
+      
+      console.log('✅ SERVICE: Asset movement record created');
+    } else {
+      console.log('🔍 SERVICE: No location change detected or locationId not updated');
+    }
+
+    console.log('✅ SERVICE: updateUniqueAsset completed successfully');
+    return updatedAsset;
   }
 
   /**
@@ -541,6 +667,7 @@ export class UniqueAssetService {
       const updatedAsset = await UniqueAssetDataAccess.updateUniqueAsset(
         assetId,
         updates,
+        updatedBy
       );
 
       // Log keeper change if applicable

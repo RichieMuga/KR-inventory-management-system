@@ -64,15 +64,15 @@ export function AssetCard({ asset }: AssetCardProps) {
     Disposed: "bg-red-100 text-red-800",
   };
 
-  const handleViewAsset = () => {
-    router.push(`/viewAsset/${asset.id}`);
+  const handleViewAsset = (assetId: string) => {
+    router.push(`uniqueAssets/viewAsset/${assetId}`);
   };
 
-  const handleEditAsset = () => {
-    router.push(`/editAsset/${asset.id}`);
+  const handleEditAsset = (assetId: string) => {
+    router.push(`uniqueAssets/editAsset/${assetId}`);
   };
 
-  const handleDeleteAsset = () => {
+  const handleDeleteAsset = (assetId: string) => {
     console.log("Delete asset:", asset.id);
     // TODO: Implement delete asset functionality
     // You might want to show a confirmation dialog before deleting
@@ -204,7 +204,7 @@ export function AssetCard({ asset }: AssetCardProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleViewAsset}
+                onClick={() => handleViewAsset(asset.id)}
                 className="flex-1 text-blue-600 border-blue-200 hover:bg-blue-50 bg-transparent transition-colors"
               >
                 <Eye className="mr-2 h-4 w-4" />
@@ -221,7 +221,7 @@ export function AssetCard({ asset }: AssetCardProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleEditAsset}
+                onClick={() => handleEditAsset(asset.id)}
                 className="flex-1 text-amber-600 border-amber-200 hover:bg-amber-50 bg-transparent transition-colors"
               >
                 <Edit className="mr-2 h-4 w-4" />
@@ -238,7 +238,7 @@ export function AssetCard({ asset }: AssetCardProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleDeleteAsset}
+                onClick={() => handleDeleteAsset(asset.id)}
                 className="flex-1 text-red-600 border-red-200 hover:bg-red-50 bg-transparent transition-colors"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
