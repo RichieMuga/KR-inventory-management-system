@@ -42,11 +42,11 @@ export function AssetTable({ assets }: AssetTableProps) {
   const router = useRouter();
   console.log(assets)
   const handleViewAsset = (assetId: string) => {
-    router.push(`/viewAsset/${assetId}`);
+    router.push(`uniqueAssets/viewAsset/${assetId}`);
   };
 
   const handleEditAsset = (assetId: string) => {
-    router.push(`/editAsset/${assetId}`);
+    router.push(`uniqueAssets/editAsset/${assetId}`);
   };
 
   const handleDeleteAsset = (assetId: string) => {
