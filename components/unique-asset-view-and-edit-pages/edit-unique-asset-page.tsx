@@ -137,7 +137,7 @@ export function EditUniqueAssetPage({ assetId }: EditUniqueAssetPageProps) {
         name: assetData.name || '',
         modelNumber: assetData.modelNumber || '',
         serialNumber: assetData.serialNumber || '',
-        keeperPayrollNumber: assetData.keeperPayrollNumber || '',
+        keeperPayrollNumber: assetData.keeperPayrollNumber || 'NONE',
         locationId: assetData.locationId || 0,
         notes: assetData.notes || ''
       });
@@ -150,7 +150,12 @@ export function EditUniqueAssetPage({ assetId }: EditUniqueAssetPageProps) {
   // Mutation for updating unique asset
   const updateAssetMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const response = await api.patch(`/uniqueAssets/${assetId}`, data);
+      // Convert 'NONE' back to empty string for the API
+      const apiData = {
+        ...data,
+        keeperPayrollNumber: data.keeperPayrollNumber === 'NONE' ? '' : data.keeperPayrollNumber
+      };
+      const response = await api.patch(`/uniqueAssets/${assetId}`, apiData);
       return response.data;
     },
     onSuccess: (data) => {
@@ -175,7 +180,7 @@ export function EditUniqueAssetPage({ assetId }: EditUniqueAssetPageProps) {
         name: assetData.name || '',
         modelNumber: assetData.modelNumber || '',
         serialNumber: assetData.serialNumber || '',
-        keeperPayrollNumber: assetData.keeperPayrollNumber || '',
+        keeperPayrollNumber: assetData.keeperPayrollNumber || 'NONE',
         locationId: assetData.locationId || 0,
         notes: assetData.notes || ''
       });
@@ -189,7 +194,7 @@ export function EditUniqueAssetPage({ assetId }: EditUniqueAssetPageProps) {
 
   // Get current keeper and location details
   const currentKeeper = usersData?.data?.find(
-    (user: User) => user.payrollNumber === watchedValues.keeperPayrollNumber
+    (user: User) => user.payrollNumber === (watchedValues.keeperPayrollNumber === 'NONE' ? '' : watchedValues.keeperPayrollNumber)
   );
   const currentLocation = locationsData?.data?.find(
     (location: Location) => location.locationId === watchedValues.locationId
@@ -316,8 +321,11 @@ export function EditUniqueAssetPage({ assetId }: EditUniqueAssetPageProps) {
               <div>
                 <h3 className="font-medium">{watchedValues.name || assetData.name}</h3>
                 <p className="text-sm text-muted-foreground">
-                  {currentLocation?.departmentName || "No location"} • {currentKeeper?.firstName}{" "}
-                  {currentKeeper?.lastName || "No keeper assigned"}
+                  {currentLocation?.departmentName || "No location"} • {
+                    watchedValues.keeperPayrollNumber === 'NONE' || !currentKeeper 
+                      ? "No keeper assigned" 
+                      : `${currentKeeper.firstName} ${currentKeeper.lastName}`
+                  }
                 </p>
               </div>
             </div>
@@ -517,7 +525,7 @@ export function EditUniqueAssetPage({ assetId }: EditUniqueAssetPageProps) {
                         <SelectValue placeholder="Select asset keeper (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">
+                        <SelectItem value="NONE">
                           <div className="text-muted-foreground">No keeper assigned</div>
                         </SelectItem>
                         {usersData?.data?.map((user: User) => (
@@ -542,7 +550,7 @@ export function EditUniqueAssetPage({ assetId }: EditUniqueAssetPageProps) {
                     </p>
                   </div>
 
-                  {currentKeeper ? (
+                  {currentKeeper && watchedValues.keeperPayrollNumber !== 'NONE' ? (
                     <div className="p-3 bg-green-50 rounded-lg border border-green-200">
                       <div className="flex items-center gap-2 mb-2">
                         <User className="h-4 w-4 text-green-600" />
