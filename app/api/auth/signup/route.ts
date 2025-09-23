@@ -4,7 +4,7 @@ import { withAdminAuth } from "@/middleware/authMiddleware";
 
 const authService = new AuthService();
 
-export const POST = withAdminAuth(async (req: NextRequest) => {
+export const POST = async (req: NextRequest) => {
   try {
     const body = await req.json();
     const { payrollNumber, firstName, lastName, password, role } = body;
@@ -44,4 +44,4 @@ export const POST = withAdminAuth(async (req: NextRequest) => {
       { status: 500 },
     );
   }
-});
+};

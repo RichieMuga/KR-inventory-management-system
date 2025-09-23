@@ -8,18 +8,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { LocationCard } from "@/components/location-card";
+import { LocationCard } from "@/components/cards/location-card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Search, Loader2, X } from "lucide-react";
+import { PlusCircle, Search, Loader2, X, Pencil, Trash2 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { toggleLocationModal } from "@/lib/features/modals/location-modal";
 import { RootState } from "@/lib/store";
 import CreateLocationModal from "@/components/modals/create-location-modal";
+import EditLocationModal from "@/components/modals/location/edit-location-modal";
+import DeleteLocationModal from "@/components/modals/location/delete-location-modal";
 import Pagination from "@/components/pagination/pagination";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/axiosInterceptor";
 import { usePagination } from "@/lib/hooks/usePagination";
+import { useState } from "react";
 
 interface Location {
   locationId: number;
@@ -43,22 +46,20 @@ interface LocationsResponse {
     nextPage: number | null;
     previousPage: number | null;
   };
-  search?: string; // Add search field to response type
+  search?: string;
 }
 
-// Optimized fetch function with better error handling
 const fetchLocations = async (
   queryParams: Record<string, any>,
 ): Promise<LocationsResponse> => {
   try {
-    // Filter out undefined, null, and empty string values
     const cleanParams = Object.fromEntries(
       Object.entries(queryParams).filter(
         ([_, value]) => value !== undefined && value !== null && value !== "",
       ),
     );
 
-    console.log("Fetching locations with params:", cleanParams); // Debug log
+    console.log("Fetching locations with params:", cleanParams);
 
     const response = await api.get("/locations", {
       params: cleanParams,
@@ -66,7 +67,7 @@ const fetchLocations = async (
 
     return response.data;
   } catch (error) {
-    console.error("Error fetching locations:", error); // Debug log
+    console.error("Error fetching locations:", error);
     if (error instanceof Error) {
       throw new Error(`Failed to fetch locations: ${error.message}`);
     }
@@ -76,8 +77,14 @@ const fetchLocations = async (
 
 export default function LocationsPage() {
   const dispatch = useDispatch();
+  const queryClient = useQueryClient();
+  
+  // State for edit/delete modals
+  const [editingLocation, setEditingLocation] = useState<Location | null>(null);
+  const [deletingLocation, setDeletingLocation] = useState<Location | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
-  // Use the custom pagination hook
   const {
     queryParams,
     searchInput,
@@ -90,12 +97,10 @@ export default function LocationsPage() {
     paginationState,
   } = usePagination("locations");
 
-  // Get modal state
   const { isLocationModalOpen } = useSelector(
     (state: RootState) => state.locationModal,
   );
 
-  // React Query for fetching locations with optimized configuration
   const {
     data: locationsResponse,
     isLoading,
@@ -103,21 +108,49 @@ export default function LocationsPage() {
     error,
     isFetching,
   } = useQuery({
-    queryKey: ["locations", queryParams], // This will trigger refetch when queryParams change
+    queryKey: ["locations", queryParams],
     queryFn: () => fetchLocations(queryParams),
-    placeholderData: keepPreviousData, // Keep previous data while loading new data
-    staleTime: 5 * 60 * 1000, // 5 minutes - adjust based on how often your data changes
-    retry: 3, // Retry failed requests 3 times
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   function handleLocationModalToggle() {
     dispatch(toggleLocationModal());
   }
 
-  // Handle search with Redux dispatch
   const handleSearchClick = () => {
-    search(); // This will dispatch to Redux and update queryParams
+    search();
+  };
+
+  // Handle edit location
+  const handleEdit = (location: any) => {
+    // Find the full location data from the current data
+    const fullLocation = locationsResponse?.data.find(
+      (loc: Location) => loc.locationId.toString() === location.id
+    );
+    if (fullLocation) {
+      setEditingLocation(fullLocation);
+      setIsEditModalOpen(true);
+    }
+  };
+
+  // Handle delete location
+  const handleDelete = (location: any) => {
+    const fullLocation = locationsResponse?.data.find(
+      (loc: Location) => loc.locationId.toString() === location.id
+    );
+    if (fullLocation) {
+      setDeletingLocation(fullLocation);
+      setIsDeleteModalOpen(true);
+    }
+  };
+
+  // Handle successful edit/delete operations
+  const handleOperationSuccess = () => {
+    // Invalidate and refetch the locations query
+    queryClient.invalidateQueries({ queryKey: ["locations"] });
   };
 
   const locations = locationsResponse?.data || [];
@@ -138,10 +171,9 @@ export default function LocationsPage() {
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyPress={handleSearchKeyPress}
             className="flex-1 pr-20"
-            disabled={isLoading} // Disable during loading
+            disabled={isLoading}
           />
 
-          {/* Clear Search Button */}
           {(searchInput || activeSearch) && (
             <Button
               type="button"
@@ -156,7 +188,6 @@ export default function LocationsPage() {
             </Button>
           )}
 
-          {/* Search Button */}
           <Button
             type="button"
             size="icon"
@@ -208,7 +239,7 @@ export default function LocationsPage() {
       )}
 
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
-        {/* Loading State - Only show on initial load, not on search */}
+        {/* Loading State */}
         {isLoading && !isFetching && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-kr-maroon" />
@@ -274,6 +305,8 @@ export default function LocationsPage() {
                       departmentName: location.departmentName,
                       notes: location.notes,
                     }}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
                   />
                 ))
               ) : (
@@ -324,6 +357,7 @@ export default function LocationsPage() {
                       Department Name
                     </TableHead>
                     <TableHead className="text-white">Notes</TableHead>
+                    <TableHead className="text-white text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -339,11 +373,39 @@ export default function LocationsPage() {
                         <TableCell>{location.regionName}</TableCell>
                         <TableCell>{location.departmentName}</TableCell>
                         <TableCell>{location.notes || "N/A"}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEdit({
+                                id: location.locationId.toString(),
+                                regionName: location.regionName,
+                                departmentName: location.departmentName
+                              })}
+                              className="h-8 w-8 text-kr-orange hover:text-kr-orange-dark"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete({
+                                id: location.locationId.toString(),
+                                regionName: location.regionName,
+                                departmentName: location.departmentName
+                              })}
+                              className="h-8 w-8 text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-12">
+                      <TableCell colSpan={5} className="text-center py-12">
                         {activeSearch ? (
                           <div className="space-y-4">
                             <div className="text-2xl">🔍</div>
@@ -401,7 +463,6 @@ export default function LocationsPage() {
             onPageChange={setPage}
           />
 
-          {/* Pagination Info */}
           <div className="text-center text-sm text-muted-foreground mt-4">
             Showing {(pagination.currentPage - 1) * pagination.itemsPerPage + 1}{" "}
             to{" "}
@@ -417,7 +478,7 @@ export default function LocationsPage() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modals */}
       {isLocationModalOpen && (
         <CreateLocationModal
           onSubmit={handleLocationModalToggle}
@@ -425,6 +486,20 @@ export default function LocationsPage() {
           isOpen={isLocationModalOpen}
         />
       )}
+
+      <EditLocationModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSuccess={handleOperationSuccess}
+        location={editingLocation}
+      />
+
+      <DeleteLocationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onSuccess={handleOperationSuccess}
+        location={deletingLocation}
+      />
     </div>
   );
 }

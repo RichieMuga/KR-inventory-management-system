@@ -1,9 +1,10 @@
 "use client";
 
 import { useDispatch, useSelector } from "react-redux";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/axiosInterceptor";
 import { usePagination } from "@/lib/hooks/usePagination";
+import { useState } from "react";
 
 import {
   Table,
@@ -14,13 +15,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { UserCard } from "@/components/user-card";
+import { UserCard } from "@/components/cards/user-card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Search, Loader2, X } from "lucide-react";
+import { PlusCircle, Search, Loader2, X, Pencil, Trash2 } from "lucide-react";
 import { toggleUserModal } from "@/lib/features/modals/user-creation-modal";
 import { RootState } from "@/lib/store";
 import CreateUserModal from "@/components/modals/user-creation-modal";
+import EditUserModal from "@/components/modals/user/edit-user-modal";
+import DeleteUserModal from "@/components/modals/user/delete-user-modal";
 import Pagination from "@/components/pagination/pagination";
 
 interface User {
@@ -65,6 +68,15 @@ const fetchUsers = async (
 };
 
 export default function UsersPage() {
+  const dispatch = useDispatch();
+  const queryClient = useQueryClient();
+  
+  // State for edit/delete modals
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
   const getRoleColor = (role: string) => {
     switch (role.toLowerCase()) {
       case "admin":
@@ -77,8 +89,6 @@ export default function UsersPage() {
         return "bg-gray-100 text-gray-800";
     }
   };
-
-  const dispatch = useDispatch();
 
   // Use the pagination hook
   const {
@@ -104,10 +114,10 @@ export default function UsersPage() {
     error,
     refetch,
   } = useQuery<UsersResponse>({
-    queryKey: ["users", queryParams], // Include all query params in the key
+    queryKey: ["users", queryParams],
     queryFn: () => fetchUsers(queryParams),
-    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const handleUserModalToggle = () => {
@@ -124,6 +134,33 @@ export default function UsersPage() {
 
   const handleClearSearch = () => {
     clearSearch();
+  };
+
+  // Handle edit user
+  const handleEdit = (user: any) => {
+    const fullUser = usersData?.data.find(
+      (u: User) => u.payrollNumber === user.payrollNumber
+    );
+    if (fullUser) {
+      setEditingUser(fullUser);
+      setIsEditModalOpen(true);
+    }
+  };
+
+  // Handle delete user
+  const handleDelete = (user: any) => {
+    const fullUser = usersData?.data.find(
+      (u: User) => u.payrollNumber === user.payrollNumber
+    );
+    if (fullUser) {
+      setDeletingUser(fullUser);
+      setIsDeleteModalOpen(true);
+    }
+  };
+
+  // Handle successful edit/delete operations
+  const handleOperationSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ["users"] });
   };
 
   // Loading state
@@ -238,14 +275,18 @@ export default function UsersPage() {
         <div className="grid gap-4 md:hidden">
           {users.length > 0 ? (
             users.map((user: User) => {
-              // Transform user data to match UserCard expected format
               const transformedUser = {
                 ...user,
                 role: (user.role.charAt(0).toUpperCase() +
                   user.role.slice(1)) as "Admin" | "Keeper" | "Viewer",
               };
               return (
-                <UserCard key={user.payrollNumber} user={transformedUser} />
+                <UserCard 
+                  key={user.payrollNumber} 
+                  user={transformedUser}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                />
               );
             })
           ) : (
@@ -281,6 +322,7 @@ export default function UsersPage() {
                 <TableHead className="text-white">
                   Must Change Password
                 </TableHead>
+                <TableHead className="text-white text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -326,11 +368,31 @@ export default function UsersPage() {
                         {user.mustChangePassword ? "Required" : "Not Required"}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(user)}
+                          className="h-8 w-8 text-kr-orange hover:text-kr-orange-dark"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(user)}
+                          className="h-8 w-8 text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12">
+                  <TableCell colSpan={7} className="text-center py-12">
                     <div className="flex flex-col items-center gap-4">
                       <p className="text-muted-foreground text-lg">
                         {hasActiveSearch
@@ -363,7 +425,6 @@ export default function UsersPage() {
               onPageChange={handlePageChange}
             />
 
-            {/* Pagination Info */}
             <div className="text-center text-sm text-muted-foreground mt-4">
               Showing {(currentPage - 1) * queryParams.limit + 1} to{" "}
               {Math.min(currentPage * queryParams.limit, totalUsers)} of{" "}
@@ -375,8 +436,22 @@ export default function UsersPage() {
           </div>
         )}
 
-        {/* Modal */}
+        {/* Modals */}
         {isUserModalOpen && <CreateUserModal />}
+
+        <EditUserModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          onSuccess={handleOperationSuccess}
+          user={editingUser}
+        />
+
+        <DeleteUserModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+          onSuccess={handleOperationSuccess}
+          user={deletingUser}
+        />
       </main>
     </div>
   );

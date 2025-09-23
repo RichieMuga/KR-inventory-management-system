@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
 import Image from "next/image";
 import { RotateCcw, ArrowLeft, Copy, CheckCircle } from "lucide-react";
 
@@ -16,9 +17,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { api } from "@/lib/api/axiosInterceptor";
+
+interface ResetPasswordForm {
+  targetPayrollNumber: string;
+}
+
+interface ApiResponse {
+  message: string;
+  temporaryPassword: string;
+}
 
 export default function ResetPasswordPage() {
-  const [payrollNumber, setPayrollNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -26,26 +36,37 @@ export default function ResetPasswordPage() {
   const [copied, setCopied] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isValid },
+  } = useForm<ResetPasswordForm>({
+    mode: "onChange",
+  });
+
+  const onSubmit = async (data: ResetPasswordForm) => {
     setLoading(true);
     setError("");
     setSuccess("");
     setTemporaryPassword("");
 
-    // TODO: Replace with your API implementation
-    console.log("Reset password attempt for:", payrollNumber.trim());
+    try {
+      const response = await api.post<ApiResponse>("/auth/reset-password", {
+        targetPayrollNumber: data.targetPayrollNumber.trim(),
+      });
 
-    // Simulate API call
-    setTimeout(() => {
+      setTemporaryPassword(response.data.temporaryPassword);
+      setSuccess(response.data.message);
+    } catch (err: any) {
+      const errorMessage = 
+        err.response?.data?.message || 
+        err.message || 
+        "Failed to reset password. Please try again.";
+      setError(errorMessage);
+    } finally {
       setLoading(false);
-      // Simulate successful reset with temporary password
-      const tempPassword = "Temp123!";
-      setTemporaryPassword(tempPassword);
-      setSuccess(
-        `Password has been reset for ${payrollNumber}. Temporary password generated.`,
-      );
-    }, 1000);
+    }
   };
 
   const handleCopyPassword = async () => {
@@ -61,7 +82,7 @@ export default function ResetPasswordPage() {
   };
 
   const handleReset = () => {
-    setPayrollNumber("");
+    reset();
     setError("");
     setSuccess("");
     setTemporaryPassword("");
@@ -143,30 +164,41 @@ export default function ResetPasswordPage() {
           )}
 
           {!temporaryPassword ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
                 <Label
-                  htmlFor="payrollNumber"
+                  htmlFor="targetPayrollNumber"
                   className="text-sm font-medium text-gray-700"
                 >
                   Employee Payroll Number
                 </Label>
                 <Input
-                  id="payrollNumber"
+                  id="targetPayrollNumber"
                   type="text"
-                  required
-                  value={payrollNumber}
-                  onChange={(e) => setPayrollNumber(e.target.value)}
                   placeholder="Enter employee payroll number"
                   disabled={loading}
                   className="w-full"
+                  {...register("targetPayrollNumber", {
+                    required: "Payroll number is required",
+                    minLength: {
+                      value: 1,
+                      message: "Payroll number cannot be empty"
+                    },
+                    validate: (value) => 
+                      value.trim().length > 0 || "Payroll number cannot be empty"
+                  })}
                 />
+                {errors.targetPayrollNumber && (
+                  <p className="text-sm text-red-600">
+                    {errors.targetPayrollNumber.message}
+                  </p>
+                )}
               </div>
 
               <Button
                 type="submit"
                 className="w-full bg-kr-orange hover:bg-kr-orange-dark text-white font-medium py-2 px-4 rounded-md transition-colors duration-200"
-                disabled={loading || !payrollNumber.trim()}
+                disabled={loading || !isValid}
               >
                 {loading ? (
                   <div className="flex items-center justify-center">

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Eye, EyeOff, UserPlus, ArrowLeft } from "lucide-react";
+import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,77 +25,88 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+interface SignupFormData {
+  payrollNumber: string;
+  firstName: string;
+  lastName: string;
+  password: string;
+  confirmPassword: string;
+  role: "viewer" | "keeper";
+}
+
 export default function SignupPage() {
-  const [formData, setFormData] = useState({
-    payrollNumber: "",
-    firstName: "",
-    lastName: "",
-    password: "",
-    confirmPassword: "",
-    role: "viewer" as "admin" | "keeper" | "viewer",
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<SignupFormData>({
+    defaultValues: {
+      payrollNumber: "",
+      firstName: "",
+      lastName: "",
+      password: "",
+      confirmPassword: "",
+      role: "viewer",
+    },
   });
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const router = useRouter();
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  const password = watch("password");
+  const role = watch("role");
 
-  const handleRoleChange = (value: "admin" | "keeper" | "viewer") => {
-    setFormData((prev) => ({
-      ...prev,
-      role: value,
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const onSubmit = async (data: SignupFormData) => {
     setError("");
     setSuccess("");
 
-    // Validation
-    if (formData.password !== formData.confirmPassword) {
+    // Validation for password match
+    if (data.password !== data.confirmPassword) {
       setError("Passwords do not match");
-      setLoading(false);
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters long");
-      setLoading(false);
-      return;
-    }
-
-    // TODO: Replace with your API implementation
-    console.log("Signup attempt:", {
-      payrollNumber: formData.payrollNumber,
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      role: formData.role,
-    });
-
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
-      setSuccess("User created successfully!");
-      setFormData({
-        payrollNumber: "",
-        firstName: "",
-        lastName: "",
-        password: "",
-        confirmPassword: "",
-        role: "viewer",
+    try {
+      const response = await fetch("http://localhost:3000/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          payrollNumber: data.payrollNumber,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          password: data.password,
+          role: data.role,
+        }),
       });
-    }, 1000);
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to create user");
+      }
+
+      setSuccess(result.message || "User created successfully!");
+      reset(); // Reset form after successful submission
+      
+      // Redirect to login page after a short delay
+      setTimeout(() => {
+        router.push("/auth/login");
+      }, 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    }
+  };
+
+  const handleRoleChange = (value: "viewer" | "keeper") => {
+    setValue("role", value);
   };
 
   return (
@@ -143,7 +155,7 @@ export default function SignupPage() {
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label
@@ -154,14 +166,22 @@ export default function SignupPage() {
                 </Label>
                 <Input
                   id="firstName"
-                  name="firstName"
                   type="text"
-                  required
-                  value={formData.firstName}
-                  onChange={handleInputChange}
                   placeholder="First name"
-                  disabled={loading}
+                  disabled={isSubmitting}
+                  {...register("firstName", {
+                    required: "First name is required",
+                    minLength: {
+                      value: 2,
+                      message: "First name must be at least 2 characters",
+                    },
+                  })}
                 />
+                {errors.firstName && (
+                  <p className="text-sm text-red-600">
+                    {errors.firstName.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -173,14 +193,22 @@ export default function SignupPage() {
                 </Label>
                 <Input
                   id="lastName"
-                  name="lastName"
                   type="text"
-                  required
-                  value={formData.lastName}
-                  onChange={handleInputChange}
                   placeholder="Last name"
-                  disabled={loading}
+                  disabled={isSubmitting}
+                  {...register("lastName", {
+                    required: "Last name is required",
+                    minLength: {
+                      value: 2,
+                      message: "Last name must be at least 2 characters",
+                    },
+                  })}
                 />
+                {errors.lastName && (
+                  <p className="text-sm text-red-600">
+                    {errors.lastName.message}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -193,14 +221,22 @@ export default function SignupPage() {
               </Label>
               <Input
                 id="payrollNumber"
-                name="payrollNumber"
                 type="text"
-                required
-                value={formData.payrollNumber}
-                onChange={handleInputChange}
                 placeholder="Employee payroll number"
-                disabled={loading}
+                disabled={isSubmitting}
+                {...register("payrollNumber", {
+                  required: "Payroll number is required",
+                  minLength: {
+                    value: 3,
+                    message: "Payroll number must be at least 3 characters",
+                  },
+                })}
               />
+              {errors.payrollNumber && (
+                <p className="text-sm text-red-600">
+                  {errors.payrollNumber.message}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -211,9 +247,9 @@ export default function SignupPage() {
                 Role
               </Label>
               <Select
-                value={formData.role}
+                value={role}
                 onValueChange={handleRoleChange}
-                disabled={loading}
+                disabled={isSubmitting}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select user role" />
@@ -221,9 +257,11 @@ export default function SignupPage() {
                 <SelectContent>
                   <SelectItem value="viewer">Viewer</SelectItem>
                   <SelectItem value="keeper">Store Keeper</SelectItem>
-                  <SelectItem value="admin">Administrator</SelectItem>
                 </SelectContent>
               </Select>
+              {errors.role && (
+                <p className="text-sm text-red-600">{errors.role.message}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -236,14 +274,22 @@ export default function SignupPage() {
               <div className="relative">
                 <Input
                   id="password"
-                  name="password"
                   type={showPassword ? "text" : "password"}
-                  required
-                  value={formData.password}
-                  onChange={handleInputChange}
                   placeholder="Enter initial password"
                   className="pr-10"
-                  disabled={loading}
+                  disabled={isSubmitting}
+                  {...register("password", {
+                    required: "Password is required",
+                    minLength: {
+                      value: 6,
+                      message: "Password must be at least 6 characters long",
+                    },
+                    pattern: {
+                      value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+                      message:
+                        "Password must contain at least one uppercase letter, one lowercase letter, and one number",
+                    },
+                  })}
                 />
                 <Button
                   type="button"
@@ -251,7 +297,7 @@ export default function SignupPage() {
                   size="icon"
                   className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={loading}
+                  disabled={isSubmitting}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4 text-gray-400" />
@@ -260,6 +306,11 @@ export default function SignupPage() {
                   )}
                 </Button>
               </div>
+              {errors.password && (
+                <p className="text-sm text-red-600">
+                  {errors.password.message}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -272,14 +323,15 @@ export default function SignupPage() {
               <div className="relative">
                 <Input
                   id="confirmPassword"
-                  name="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
-                  required
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
                   placeholder="Confirm password"
                   className="pr-10"
-                  disabled={loading}
+                  disabled={isSubmitting}
+                  {...register("confirmPassword", {
+                    required: "Please confirm your password",
+                    validate: (value) =>
+                      value === password || "Passwords do not match",
+                  })}
                 />
                 <Button
                   type="button"
@@ -287,7 +339,7 @@ export default function SignupPage() {
                   size="icon"
                   className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  disabled={loading}
+                  disabled={isSubmitting}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-4 w-4 text-gray-400" />
@@ -296,14 +348,19 @@ export default function SignupPage() {
                   )}
                 </Button>
               </div>
+              {errors.confirmPassword && (
+                <p className="text-sm text-red-600">
+                  {errors.confirmPassword.message}
+                </p>
+              )}
             </div>
 
             <Button
               type="submit"
               className="w-full bg-kr-orange hover:bg-kr-orange-dark text-white font-medium py-2 px-4 rounded-md transition-colors duration-200"
-              disabled={loading}
+              disabled={isSubmitting}
             >
-              {loading ? (
+              {isSubmitting ? (
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Creating User...

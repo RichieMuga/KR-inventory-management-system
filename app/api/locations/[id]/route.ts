@@ -4,6 +4,7 @@ import {
   withKeeperAuth,
   withAdminAuth,
   AuthenticatedRequest,
+  withAuth,
 } from "@/middleware/authMiddleware";
 import * as schema from "@/db/schema";
 
@@ -140,7 +141,7 @@ export async function GET(
   request: Request,
   context: { params: { id: string } },
 ) {
-  return withKeeperAuth((req) => getLocation(req, context))(request as any);
+  return withAuth((req) => getLocation(req, context))(request as any);
 }
 
 export async function PATCH(

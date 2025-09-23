@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { Menu, User, Lock, LogOut, ChevronDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -204,6 +204,7 @@ export function Header() {
       {/* Mobile Left: Hamburger menu */}
       <div className="md:hidden flex items-center">
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
+          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
           <SheetTrigger asChild>
             <Button
               variant="outline"
