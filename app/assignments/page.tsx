@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Search, Loader2 } from "lucide-react";
-import axios from "axios";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +22,7 @@ import Pagination from "@/components/pagination/pagination";
 import { toggleUniqueAssignmentModal, toggleBulkAssignmentModal } from "@/lib/features/modals/assignment-modal";
 import { RootState } from "@/lib/store";
 import { useSelector, useDispatch } from "react-redux";
+import { api } from "@/lib/api/axiosInterceptor";
 
 // Types
 interface Assignment {
@@ -46,6 +46,17 @@ interface Assignment {
   status: "active" | "inactive";
   dateReturned: string | null;
   conditionReturned: string | null;
+}
+
+interface StockLevel {
+  assetId: number;
+  name: string;
+  currentStockLevel: number;
+  minimumThreshold: number;
+  lastRestocked: string;
+  isLowStock: boolean;
+  totalMovements: number;
+  totalRestocked: number;
 }
 
 interface AssignmentsResponse {
@@ -79,13 +90,41 @@ const fetchAssignments = async (
     params.append("search", `?q=${searchQuery.trim()}`);
   }
 
-  const response = await axios.get(`api/assignments?${params.toString()}`);
+  const response = await api.get(`/assignments?${params.toString()}`);
   return response.data;
 };
 
+// API function to fetch stock levels for multiple assets
+const fetchStockLevels = async (assetIds: number[]): Promise<StockLevel[]> => {
+  if (assetIds.length === 0) return [];
+  
+  try {
+    const stockPromises = assetIds.map(async (assetId) => {
+      try {
+        const response = await api.get(`/stock-levels/${assetId}`);
+        return response.data;
+      } catch (error) {
+        console.warn(`Failed to fetch stock for asset ${assetId}:`, error);
+        return null;
+      }
+    });
+
+    const stockResults = await Promise.allSettled(stockPromises);
+    return stockResults
+      .filter((result): result is PromiseFulfilledResult<StockLevel> => 
+        result.status === 'fulfilled' && result.value !== null
+      )
+      .map(result => result.value);
+  } catch (error) {
+    console.error('Error fetching stock levels:', error);
+    return [];
+  }
+};
+
 // Transform API data to match your existing format
-const transformAssignment = (apiAssignment: Assignment) => ({
+const transformAssignment = (apiAssignment: Assignment, stockLevel?: StockLevel) => ({
   id: String(apiAssignment.assignmentId).padStart(3, "0"),
+  assetId: apiAssignment.assetId,
   assetName: apiAssignment.assetName,
   assetType: apiAssignment.isBulk ? "bulk" : ("unique" as "bulk" | "unique"),
   serialNumber: apiAssignment.serialNumber,
@@ -110,9 +149,14 @@ const transformAssignment = (apiAssignment: Assignment) => ({
   quantityRemaining: apiAssignment.quantityRemaining,
   dateReturned: formatDate(apiAssignment.dateReturned),
   conditionReturned: apiAssignment.conditionReturned,
-  // Add batch number for bulk assignments (you may need to adjust this based on your data structure)
+  // Add batch number for bulk assignments
   batchNumber:
     apiAssignment.serialNumber || `BATCH-${apiAssignment.assignmentId}`,
+  // Add stock information
+  currentStockLevel: stockLevel?.currentStockLevel || 0,
+  minimumThreshold: stockLevel?.minimumThreshold || 0,
+  isLowStock: stockLevel?.isLowStock || false,
+  lastRestocked: stockLevel?.lastRestocked ? formatDate(stockLevel.lastRestocked) : null,
 });
 
 export default function AssetAssignments() {
@@ -166,9 +210,29 @@ export default function AssetAssignments() {
     retry: 2,
   });
 
-  // Transform assignments from API
+  // Extract unique asset IDs for stock level fetching (bulk assignments only)
+  const bulkAssetIds = bulkAssignmentsData?.data?.map(a => a.assetId) || [];
+
+  // React Query to fetch stock levels for bulk assets
+  const {
+    data: stockLevelsData,
+    isLoading: stockLevelsLoading,
+  } = useQuery({
+    queryKey: ["stockLevels", bulkAssetIds],
+    queryFn: () => fetchStockLevels(bulkAssetIds),
+    enabled: activeTab === "bulk" && bulkAssetIds.length > 0,
+    staleTime: 2 * 60 * 1000, // 2 minutes (stock data changes more frequently)
+    retry: 1,
+  });
+
+  // Create a map of stock levels by asset ID for easy lookup
+  const stockLevelsMap = new Map(stockLevelsData?.map(stock => [stock.assetId, stock]) || []);
+
+  // Transform assignments from API with stock data
   const bulkAssignments =
-    bulkAssignmentsData?.data?.map(transformAssignment) || [];
+    bulkAssignmentsData?.data?.map(assignment => 
+      transformAssignment(assignment, stockLevelsMap.get(assignment.assetId))
+    ) || [];
 
   const uniqueAssignments =
     uniqueAssignmentsData?.data?.map(transformAssignment) || [];
@@ -253,7 +317,7 @@ export default function AssetAssignments() {
           selectedAssignment.id.toString();
 
         // Make API call to delete assignment
-        await axios.delete(`/api/assignments/${assignmentId}`);
+        await api.delete(`/assignments/${assignmentId}`);
 
         // Refetch assignments after successful deletion
         if (selectedAssignment.assetType === "bulk") {
@@ -312,6 +376,13 @@ export default function AssetAssignments() {
     (activeTab === "bulk" && isBulkAssignmentModalOpen) || 
     (activeTab === "unique" && isUniqueAssignmentModalOpen);
 
+  // Calculate stock statistics for bulk assets
+  const lowStockCount = bulkAssignments.filter(a => a.isLowStock).length;
+  const totalCurrentStock = bulkAssignments.reduce((sum, a) => sum + a.currentStockLevel, 0);
+  const averageStockLevel = bulkAssignments.length > 0 
+    ? Math.round(totalCurrentStock / bulkAssignments.length) 
+    : 0;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-full mx-auto">
@@ -348,7 +419,7 @@ export default function AssetAssignments() {
                   className="data-[state=active]:bg-kr-maroon data-[state=active]:text-white"
                 >
                   Bulk Assets ({bulkAssignments.length})
-                  {bulkAssignmentsLoading && (
+                  {(bulkAssignmentsLoading || stockLevelsLoading) && (
                     <Loader2 className="h-3 w-3 ml-1 animate-spin" />
                   )}
                 </TabsTrigger>
@@ -367,10 +438,10 @@ export default function AssetAssignments() {
             {/* Bulk Assets Tab */}
             <TabsContent value="bulk" className="p-6">
               {/* Loading State */}
-              {bulkAssignmentsLoading && (
+              {(bulkAssignmentsLoading || stockLevelsLoading) && (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin mr-2" />
-                  <span>Loading bulk assignments...</span>
+                  <span>Loading bulk assignments and stock levels...</span>
                 </div>
               )}
 
@@ -390,7 +461,7 @@ export default function AssetAssignments() {
               )}
 
               {/* Search Bar */}
-              {!bulkAssignmentsLoading && (
+              {!bulkAssignmentsLoading && !stockLevelsLoading && (
                 <div className="relative flex w-full max-w-sm md:max-w-md mb-6">
                   <Input
                     type="search"
@@ -423,7 +494,7 @@ export default function AssetAssignments() {
               )}
 
               {/* Search Results Info */}
-              {searchQuery && !bulkAssignmentsLoading && (
+              {searchQuery && !bulkAssignmentsLoading && !stockLevelsLoading && (
                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-800">
                     Found <strong>{filteredAssignments.length}</strong> bulk
@@ -438,10 +509,10 @@ export default function AssetAssignments() {
                 </div>
               )}
 
-              {/* Bulk Assets Statistics */}
-              {!bulkAssignmentsLoading && (
+              {/* Bulk Assets Statistics with Stock Information */}
+              {!bulkAssignmentsLoading && !stockLevelsLoading && (
                 <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div className="text-center">
                       <p className="text-2xl font-bold text-green-600">
                         {
@@ -452,39 +523,39 @@ export default function AssetAssignments() {
                       <p className="text-sm text-gray-600">In Use</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-yellow-600">
+                      <p className="text-2xl font-bold text-blue-600">
                         {
                           bulkAssignments.filter(
-                            (a) => a.status === "Partially returned",
+                            (a) => a.status === "Returned",
                           ).length
                         }
                       </p>
-                      <p className="text-sm text-gray-600">Partial Returns</p>
+                      <p className="text-sm text-gray-600">Returned</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-blue-600">
-                        {
-                          bulkAssignments.filter((a) => a.status === "Returned")
-                            .length
-                        }
+                      <p className="text-2xl font-bold text-orange-600">
+                        {totalCurrentStock}
                       </p>
-                      <p className="text-sm text-gray-600">Fully Returned</p>
+                      <p className="text-sm text-gray-600">Current Stock</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-gray-600">
-                        {bulkAssignments.reduce(
-                          (sum, a) => sum + (a.quantityRemaining || 0),
-                          0,
-                        )}
+                      <p className={`text-2xl font-bold ${lowStockCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {lowStockCount}
                       </p>
-                      <p className="text-sm text-gray-600">Items Outstanding</p>
+                      <p className="text-sm text-gray-600">Low Stock Alerts</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-purple-600">
+                        {averageStockLevel}
+                      </p>
+                      <p className="text-sm text-gray-600">Avg Stock Level</p>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Bulk Assets Table */}
-              {!bulkAssignmentsLoading && !bulkAssignmentsError && (
+              {!bulkAssignmentsLoading && !stockLevelsLoading && !bulkAssignmentsError && (
                 <BulkAssetsTable
                   assignments={filteredAssignments}
                   onView={handleView}
@@ -494,6 +565,7 @@ export default function AssetAssignments() {
 
               {/* Pagination for bulk assets */}
               {!bulkAssignmentsLoading &&
+                !stockLevelsLoading &&
                 bulkAssignmentsData?.pagination &&
                 bulkAssignmentsData.pagination.totalPages > 1 && (
                   <div className="mt-6">
