@@ -216,6 +216,13 @@ export default function LoginPage() {
               </span>
             </p>
           </div>
+          <div className="flex flex-col justify-center">
+            <p className="text-kr-orange">* For prototype login only</p>
+            <div className="flex flex-col justify-center">
+              <p>Payroll Number: A001</p>
+              <p>Password: StrongPass123.</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
