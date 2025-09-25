@@ -233,6 +233,7 @@ export class AssetAssignmentService {
             and(
               eq(assetAssignment.assetId, data.assetId),
               isNull(assetAssignment.dateReturned),
+              isNull(assetAssignment.deletedAt)
             ),
           )
           .limit(1);
@@ -325,7 +326,7 @@ export class AssetAssignmentService {
         .where(eq(locations.locationId, targetLocationId))
         .limit(1);
 
-      // ✅ NEW: Build comprehensive assignment details response
+      // Build comprehensive assignment details response
       const assignmentDetailsResponse: AssignmentDetailsResponse = {
         // Assignment Details
         assignmentId: newAssignment.assignmentId,
@@ -397,7 +398,7 @@ export class AssetAssignmentService {
   }
 
   /**
-   * ✅ UPDATED: Soft delete an assignment and restore asset state
+   *  Soft delete an assignment and restore asset state
    */
   static async deleteAssignment(
     assignmentId: number,
@@ -548,6 +549,71 @@ export class AssetAssignmentService {
     } catch (error) {
       console.error("Error deleting assignment:", error);
       return { success: false, message: "Failed to delete assignment" };
+    }
+  }
+
+  /**
+   * Get ALL assignments for an asset including soft-deleted ones (for debugging)
+   */
+  static async getAllAssignmentsForAsset(assetId: number) {
+    try {
+      const assignedToUser = alias(users, "assignedToUser");
+      const assignedByUser = alias(users, "assignedByUser");
+      const deletedByUser = alias(users, "deletedByUser");
+
+      const assignments = await db
+        .select({
+          assignmentId: assetAssignment.assignmentId,
+          assetId: assetAssignment.assetId,
+          assetName: assets.name,
+          assignedTo: assetAssignment.assignedTo,
+          assignedToName: sql<string>`${assignedToUser.firstName} || ' ' || ${assignedToUser.lastName}`,
+          assignedBy: assetAssignment.assignedBy,
+          assignedByName: sql<string>`${assignedByUser.firstName} || ' ' || ${assignedByUser.lastName}`,
+          dateIssued: assetAssignment.dateIssued,
+          dateReturned: assetAssignment.dateReturned,
+          quantity: assetAssignment.quantity,
+          quantityReturned: assetAssignment.quantityReturned,
+          // Soft delete fields
+          deletedAt: assetAssignment.deletedAt,
+          deletedBy: assetAssignment.deletedBy,
+          deletedByName: sql<string>`CASE WHEN ${assetAssignment.deletedBy} IS NOT NULL THEN ${deletedByUser.firstName} || ' ' || ${deletedByUser.lastName} ELSE NULL END`,
+          deletionReason: assetAssignment.deletionReason,
+          // Status flags
+          isActive: sql<boolean>`${assetAssignment.dateReturned} IS NULL AND ${assetAssignment.deletedAt} IS NULL`,
+          isReturned: sql<boolean>`${assetAssignment.dateReturned} IS NOT NULL`,
+          isSoftDeleted: sql<boolean>`${assetAssignment.deletedAt} IS NOT NULL`,
+        })
+        .from(assetAssignment)
+        .innerJoin(assets, eq(assetAssignment.assetId, assets.assetId))
+        .innerJoin(
+          assignedToUser,
+          eq(assetAssignment.assignedTo, assignedToUser.payrollNumber),
+        )
+        .innerJoin(
+          assignedByUser,
+          eq(assetAssignment.assignedBy, assignedByUser.payrollNumber),
+        )
+        .leftJoin(
+          deletedByUser,
+          eq(assetAssignment.deletedBy, deletedByUser.payrollNumber),
+        )
+        .where(eq(assetAssignment.assetId, assetId))
+        .orderBy(desc(assetAssignment.dateIssued));
+
+      return {
+        success: true,
+        data: assignments,
+        summary: {
+          total: assignments.length,
+          active: assignments.filter(a => a.isActive).length,
+          returned: assignments.filter(a => a.isReturned).length,
+          softDeleted: assignments.filter(a => a.isSoftDeleted).length,
+        },
+      };
+    } catch (error) {
+      console.error("Error fetching all assignments for asset:", error);
+      return { success: false, message: "Failed to fetch assignments" };
     }
   }
 
