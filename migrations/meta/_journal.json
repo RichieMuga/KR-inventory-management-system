@@ -8,6 +8,13 @@
       "when": 1758568122569,
       "tag": "0000_careful_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1758798575374,
+      "tag": "0001_massive_dreadnoughts",
+      "breakpoints": true
     }
   ]
 }

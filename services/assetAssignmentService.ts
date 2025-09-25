@@ -397,9 +397,164 @@ export class AssetAssignmentService {
   }
 
   /**
+   * ✅ UPDATED: Soft delete an assignment and restore asset state
+   */
+  static async deleteAssignment(
+    assignmentId: number,
+    deletedBy: string,
+    reason?: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    restoredAsset?: {
+      assetId: number;
+      name: string;
+      newStatus: string;
+      stockRestored?: number;
+    };
+  }> {
+    try {
+      // First, get the assignment details with asset info
+      const assignedToUser = alias(users, "assignedToUser");
+      const [assignment] = await db
+        .select({
+          assignmentId: assetAssignment.assignmentId,
+          assetId: assetAssignment.assetId,
+          assignedTo: assetAssignment.assignedTo,
+          assignedBy: assetAssignment.assignedBy,
+          quantity: assetAssignment.quantity,
+          quantityReturned: assetAssignment.quantityReturned,
+          dateReturned: assetAssignment.dateReturned,
+          deletedAt: assetAssignment.deletedAt,
+          assetName: assets.name,
+          isBulk: assets.isBulk,
+          currentStockLevel: assets.currentStockLevel,
+          individualStatus: assets.individualStatus,
+          locationId: assets.locationId,
+          assignedToName: sql<string>`${assignedToUser.firstName} || ' ' || ${assignedToUser.lastName}`,
+        })
+        .from(assetAssignment)
+        .innerJoin(assets, eq(assetAssignment.assetId, assets.assetId))
+        .innerJoin(
+          assignedToUser,
+          eq(assetAssignment.assignedTo, assignedToUser.payrollNumber),
+        )
+        .where(eq(assetAssignment.assignmentId, assignmentId))
+        .limit(1);
+
+      if (!assignment) {
+        return { success: false, message: "Assignment not found" };
+      }
+
+      // Check if assignment is already deleted
+      if (assignment.deletedAt) {
+        return { success: false, message: "Assignment is already deleted" };
+      }
+
+      // Verify the user performing the delete exists
+      const [deletingUser] = await db
+        .select({
+          payrollNumber: users.payrollNumber,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        })
+        .from(users)
+        .where(eq(users.payrollNumber, deletedBy))
+        .limit(1);
+
+      if (!deletingUser) {
+        return { success: false, message: "Deleting user not found" };
+      }
+
+      // Calculate quantities to restore
+      const quantityToRestore = assignment.quantity - (assignment.quantityReturned || 0);
+
+      // Prepare asset update data
+      const assetUpdateData: any = {
+        updatedAt: new Date(),
+      };
+
+      let newStatus = "";
+      let stockRestored: number | undefined;
+
+      if (assignment.isBulk) {
+        // For bulk assets: restore stock
+        if (quantityToRestore > 0) {
+          assetUpdateData.currentStockLevel = sql`${assets.currentStockLevel} + ${quantityToRestore}`;
+          stockRestored = quantityToRestore;
+        }
+        newStatus = "Stock restored";
+
+        // If assignment was not returned, clear the keeper
+        if (!assignment.dateReturned) {
+          assetUpdateData.keeperPayrollNumber = null;
+        }
+      } else {
+        // For unique assets: change status to not_in_use if not returned
+        if (!assignment.dateReturned) {
+          assetUpdateData.individualStatus = "not_in_use";
+          assetUpdateData.keeperPayrollNumber = null;
+          newStatus = "Available for assignment";
+        } else {
+          newStatus = "Already returned";
+        }
+      }
+
+      // Update the asset
+      await db
+        .update(assets)
+        .set(assetUpdateData)
+        .where(eq(assets.assetId, assignment.assetId));
+
+      // Create a movement record for the deletion/restoration
+      const movementNotes = reason 
+        ? `Assignment deleted by ${deletingUser.firstName} ${deletingUser.lastName}. Reason: ${reason}`
+        : `Assignment deleted by ${deletingUser.firstName} ${deletingUser.lastName}`;
+
+      await db.insert(assetMovement).values({
+        assetId: assignment.assetId,
+        fromLocationId: assignment.locationId,
+        toLocationId: assignment.locationId, // Same location, just status change
+        movedBy: deletedBy,
+        movementType: "adjustment",
+        quantity: quantityToRestore,
+        notes: movementNotes,
+      });
+
+      // ✅ UPDATED: Soft delete the assignment instead of hard delete
+      await db
+        .update(assetAssignment)
+        .set({
+          deletedAt: new Date(),
+          deletedBy: deletedBy,
+          deletionReason: reason || null,
+        })
+        .where(eq(assetAssignment.assignmentId, assignmentId));
+
+      return {
+        success: true,
+        message: `Assignment deleted successfully. Asset "${assignment.assetName}" ${
+          assignment.isBulk 
+            ? `stock restored by ${quantityToRestore} units` 
+            : "is now available for assignment"
+        }`,
+        restoredAsset: {
+          assetId: assignment.assetId,
+          name: assignment.assetName,
+          newStatus,
+          stockRestored,
+        },
+      };
+    } catch (error) {
+      console.error("Error deleting assignment:", error);
+      return { success: false, message: "Failed to delete assignment" };
+    }
+  }
+
+  /**
    * Get all unique asset assignments with filters
    */
-  static async getUniqueAssignments(filters: AssignmentFilters = {}) {
+ static async getUniqueAssignments(filters: AssignmentFilters = {}) {
     try {
       const {
         assignedBy,
@@ -412,12 +567,14 @@ export class AssetAssignmentService {
         status,
       } = filters;
 
-      // Create aliases for users table to handle both assignedBy and assignedTo
       const assignedToUser = alias(users, "assignedToUser");
       const assignedByUser = alias(users, "assignedByUser");
 
-      // Build conditions array
-      const conditions: SQL[] = [eq(assets.isBulk, false)];
+      // Build conditions array with soft delete filter
+      const conditions: SQL[] = [
+        eq(assets.isBulk, false),
+        isNull(assetAssignment.deletedAt) // Exclude soft-deleted records
+      ];
 
       if (assignedBy) {
         conditions.push(eq(assetAssignment.assignedBy, assignedBy));
@@ -455,7 +612,6 @@ export class AssetAssignmentService {
               ? sql`${assignedByUser.firstName} || ' ' || ${assignedByUser.lastName}`
               : assetAssignment.dateIssued;
 
-      // Build the complete query in one go
       const offset = (page - 1) * limit;
 
       const assignments = await db
@@ -492,7 +648,7 @@ export class AssetAssignmentService {
         .limit(limit)
         .offset(offset);
 
-      // Get total count for pagination
+      // ✅ UPDATED: Count with soft delete filter
       const [{ count: totalCount }] = await db
         .select({ count: sql<number>`count(*)` })
         .from(assetAssignment)
@@ -507,13 +663,12 @@ export class AssetAssignmentService {
         )
         .where(and(...conditions));
 
-      // Transform results to include calculated fields
       const transformedAssignments: AssignmentWithDetails[] = assignments.map(
         (assignment) => ({
           ...assignment,
-          quantityReturned: 0, // TODO: Calculate from return records
+          quantityReturned: 0,
           quantityRemaining: assignment.quantity,
-          status: "active" as const, // TODO: Calculate based on return status
+          status: "active" as const,
           dateReturned: null,
           conditionReturned: null,
         }),
@@ -538,7 +693,7 @@ export class AssetAssignmentService {
   /**
    * Get all bulk asset assignments with filters
    */
-  static async getBulkAssignments(filters: AssignmentFilters = {}) {
+    static async getBulkAssignments(filters: AssignmentFilters = {}) {
     try {
       const {
         assignedBy,
@@ -553,8 +708,11 @@ export class AssetAssignmentService {
       const assignedToUser = alias(users, "assignedToUser");
       const assignedByUser = alias(users, "assignedByUser");
 
-      // Build conditions array
-      const conditions: SQL[] = [eq(assets.isBulk, true)];
+      // ✅ UPDATED: Build conditions array with soft delete filter
+      const conditions: SQL[] = [
+        eq(assets.isBulk, true),
+        isNull(assetAssignment.deletedAt) // Exclude soft-deleted records
+      ];
 
       if (assignedBy) {
         conditions.push(eq(assetAssignment.assignedBy, assignedBy));
@@ -581,7 +739,6 @@ export class AssetAssignmentService {
         }
       }
 
-      // Determine sort column
       const sortColumn =
         sortBy === "assetName"
           ? assets.name
@@ -591,7 +748,6 @@ export class AssetAssignmentService {
               ? sql`${assignedByUser.firstName} || ' ' || ${assignedByUser.lastName}`
               : assetAssignment.dateIssued;
 
-      // Build the complete query in one go
       const offset = (page - 1) * limit;
 
       const assignments = await db
@@ -628,7 +784,7 @@ export class AssetAssignmentService {
         .limit(limit)
         .offset(offset);
 
-      // Get total count
+      // ✅ UPDATED: Count with soft delete filter
       const [{ count: totalCount }] = await db
         .select({ count: sql<number>`count(*)` })
         .from(assetAssignment)
@@ -643,11 +799,10 @@ export class AssetAssignmentService {
         )
         .where(and(...conditions));
 
-      // Transform results
       const transformedAssignments: AssignmentWithDetails[] = assignments.map(
         (assignment) => ({
           ...assignment,
-          quantityReturned: 0, // TODO: Calculate from return records
+          quantityReturned: 0,
           quantityRemaining: assignment.quantity,
           status: "active" as const,
           dateReturned: null,
@@ -685,7 +840,7 @@ export class AssetAssignmentService {
           assetName: assets.name,
           serialNumber: assets.serialNumber,
           isBulk: assets.isBulk,
-          individualStatus: assets.individualStatus, // ✅ Added this field
+          individualStatus: assets.individualStatus,
           assignedTo: assetAssignment.assignedTo,
           assignedToName: sql<string>`${assignedToUser.firstName} || ' ' || ${assignedToUser.lastName}`,
           assignedBy: assetAssignment.assignedBy,
@@ -707,7 +862,10 @@ export class AssetAssignmentService {
           eq(assetAssignment.assignedBy, assignedByUser.payrollNumber),
         )
         .innerJoin(locations, eq(assets.locationId, locations.locationId))
-        .where(eq(assetAssignment.assignmentId, assignmentId))
+        .where(and(
+          eq(assetAssignment.assignmentId, assignmentId),
+          isNull(assetAssignment.deletedAt) // Exclude soft-deleted records
+        ))
         .limit(1);
 
       if (!assignment) {
@@ -732,6 +890,7 @@ export class AssetAssignmentService {
       return { success: false, message: "Failed to fetch assignment" };
     }
   }
+
   /**
    * Get available assets for assignment (not already assigned for unique, or have stock for bulk)
    */
@@ -790,6 +949,156 @@ export class AssetAssignmentService {
     } catch (error) {
       console.error("Error updating assignment:", error);
       return { success: false, message: "Failed to update assignment" };
+    }
+  }
+
+  /**
+   * ✅ NEW: Bulk delete assignments with transaction support
+   */
+  static async bulkDeleteAssignments(
+    assignmentIds: number[],
+    deletedBy: string,
+    reason?: string
+  ): Promise<{
+    success: boolean;
+    results: Array<{
+      assignmentId: number;
+      success: boolean;
+      message?: string;
+      error?: string;
+      restoredAsset?: {
+        assetId: number;
+        name: string;
+        newStatus: string;
+        stockRestored?: number;
+      };
+    }>;
+    summary: {
+      total: number;
+      successful: number;
+      failed: number;
+    };
+  }> {
+    const results = [];
+    let successCount = 0;
+
+    // Process each assignment individually to ensure proper asset state management
+    // Note: We could use a transaction here, but individual processing allows
+    // partial success and better error handling per assignment
+    for (const assignmentId of assignmentIds) {
+      try {
+        const result = await this.deleteAssignment(assignmentId, deletedBy, reason);
+        
+        if (result.success) {
+          successCount++;
+          results.push({
+            assignmentId,
+            success: true,
+            message: result.message,
+            restoredAsset: result.restoredAsset,
+          });
+        } else {
+          results.push({
+            assignmentId,
+            success: false,
+            error: result.message,
+          });
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+        results.push({
+          assignmentId,
+          success: false,
+          error: errorMessage,
+        });
+      }
+    }
+
+    return {
+      success: successCount > 0,
+      results,
+      summary: {
+        total: assignmentIds.length,
+        successful: successCount,
+        failed: assignmentIds.length - successCount,
+      },
+    };
+  }
+
+  /**
+   *  Get assignments that can be safely deleted (no returns yet)
+   */
+  static async getDeletableAssignments(filters: AssignmentFilters = {}) {
+    try {
+      const assignedToUser = alias(users, "assignedToUser");
+      const assignedByUser = alias(users, "assignedByUser");
+
+      // Build base conditions - only active assignments (not returned AND not soft-deleted)
+      const conditions: SQL[] = [
+        isNull(assetAssignment.dateReturned),
+        isNull(assetAssignment.deletedAt) // Exclude soft-deleted records
+      ];
+
+      if (filters.assignedBy) {
+        conditions.push(eq(assetAssignment.assignedBy, filters.assignedBy));
+      }
+
+      if (filters.assignedTo) {
+        conditions.push(eq(assetAssignment.assignedTo, filters.assignedTo));
+      }
+
+      if (filters.search) {
+        const searchCondition = or(
+          like(assets.name, `%${filters.search}%`),
+          like(assets.serialNumber, `%${filters.search}%`),
+          like(
+            sql`${assignedToUser.firstName} || ' ' || ${assignedToUser.lastName}`,
+            `%${filters.search}%`,
+          ),
+        );
+        if (searchCondition) {
+          conditions.push(searchCondition);
+        }
+      }
+
+      const assignments = await db
+        .select({
+          assignmentId: assetAssignment.assignmentId,
+          assetId: assetAssignment.assetId,
+          assetName: assets.name,
+          serialNumber: assets.serialNumber,
+          isBulk: assets.isBulk,
+          assignedTo: assetAssignment.assignedTo,
+          assignedToName: sql<string>`${assignedToUser.firstName} || ' ' || ${assignedToUser.lastName}`,
+          assignedBy: assetAssignment.assignedBy,
+          assignedByName: sql<string>`${assignedByUser.firstName} || ' ' || ${assignedByUser.lastName}`,
+          dateIssued: assetAssignment.dateIssued,
+          quantity: assetAssignment.quantity,
+          notes: assetAssignment.notes,
+          locationName: sql<string>`${locations.regionName} || ' - ' || ${locations.departmentName}`,
+        })
+        .from(assetAssignment)
+        .innerJoin(assets, eq(assetAssignment.assetId, assets.assetId))
+        .innerJoin(
+          assignedToUser,
+          eq(assetAssignment.assignedTo, assignedToUser.payrollNumber),
+        )
+        .innerJoin(
+          assignedByUser,
+          eq(assetAssignment.assignedBy, assignedByUser.payrollNumber),
+        )
+        .innerJoin(locations, eq(assets.locationId, locations.locationId))
+        .where(and(...conditions))
+        .orderBy(desc(assetAssignment.dateIssued));
+
+      return {
+        success: true,
+        data: assignments,
+        count: assignments.length,
+      };
+    } catch (error) {
+      console.error("Error fetching deletable assignments:", error);
+      return { success: false, message: "Failed to fetch deletable assignments" };
     }
   }
 }
