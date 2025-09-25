@@ -171,7 +171,6 @@ export const assetMovement = pgTable("asset_movement", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   notes: text("notes"),
 });
-
 /**
  * Tracks assignment of assets to users (especially useful for unique assets)
  */
@@ -193,6 +192,11 @@ export const assetAssignment = pgTable("asset_assignment", {
   dateReturned: timestamp("date_returned"), // For tracking when asset was returned
   conditionReturned: conditionEnum("condition_returned"), // Condition when returned
   quantityReturned: integer("quantity_returned").default(0),
+  
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: varchar("deleted_by", { length: 50 })
+    .references(() => users.payrollNumber, { onDelete: "set null" }),
+  deletionReason: text("deletion_reason"),
 });
 
 /**
@@ -288,6 +292,11 @@ export const assetAssignmentRelations = relations(
       fields: [assetAssignment.assignedBy],
       references: [users.payrollNumber],
       relationName: "assignedBy",
+    }),
+    deletedByUser: one(users, {
+      fields: [assetAssignment.deletedBy],
+      references: [users.payrollNumber],
+      relationName: "deletedBy",
     }),
   }),
 );
