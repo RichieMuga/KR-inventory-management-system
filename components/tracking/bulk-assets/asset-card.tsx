@@ -100,23 +100,6 @@ export default function BulkAssetsCards({
                   <Eye className="h-4 w-4 mr-2" />
                   View Details
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleEdit(asset)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit Record
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onToggleStatus(asset.id)}>
-                  <Package className="h-4 w-4 mr-2" />
-                  {asset.status === "Issued"
-                    ? "Mark Not Issued"
-                    : "Mark as Issued"}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-red-600"
-                  onClick={() => handleDelete(asset)}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Record
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

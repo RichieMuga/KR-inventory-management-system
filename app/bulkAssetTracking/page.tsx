@@ -9,8 +9,6 @@ import Pagination from "@/components/pagination/pagination";
 import { BulkAsset } from "@/lib/data/bulkAssets";
 // Modal imports
 import ViewBulkAssetModal from "@/components/modals/tracking/bulk-assets/view-bulk-asset-modal";
-import EditBulkAssetModal from "@/components/modals/tracking/bulk-assets/edit-bulk-asset-modal";
-import DeleteBulkAssetModal from "@/components/modals/tracking/bulk-assets/delete-bulk-asset-modal";
 
 import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api/axiosInterceptor";
@@ -409,16 +407,6 @@ export default function BulkAssetsTracking() {
 
       {/* Modals */}
       <ViewBulkAssetModal selectedAsset={selectedAsset} />
-      <EditBulkAssetModal
-        selectedAsset={selectedAsset}
-        editFormData={editFormData}
-        setEditFormData={setEditFormData}
-        onSave={handleUpdateAsset}
-      />
-      <DeleteBulkAssetModal
-        selectedAsset={selectedAsset}
-        onDelete={handleDeleteAsset}
-      />
     </div>
   );
 }
