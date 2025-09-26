@@ -3,8 +3,6 @@
 import { useDispatch } from "react-redux";
 import {
   Eye,
-  Edit,
-  Trash2,
   Tag,
   UserCheck,
   MoreVertical,
@@ -21,10 +19,8 @@ import {
 import { UniqueAsset } from "@/lib/data/uniqueAssets";
 import {
   toggleViewModal,
-  toggleEditModal,
   toggleMoveModal,
   toggleAssignModal,
-  toggleDeleteModal,
 } from "@/lib/features/modals/unique-asset-tracking-modal";
 
 interface AssetsCardsProps {
@@ -57,12 +53,6 @@ export default function AssetsCards({ assets, setSelectedAsset, setEditFormData 
     dispatch(toggleViewModal());
   };
 
-  const handleEdit = (asset: UniqueAsset) => {
-    setSelectedAsset(asset);
-    setEditFormData({ ...asset });
-    dispatch(toggleEditModal());
-  };
-
   const handleMove = (asset: UniqueAsset) => {
     setSelectedAsset(asset);
     setEditFormData({ ...asset });
@@ -73,11 +63,6 @@ export default function AssetsCards({ assets, setSelectedAsset, setEditFormData 
     setSelectedAsset(asset);
     setEditFormData({ ...asset });
     dispatch(toggleAssignModal());
-  };
-
-  const handleDelete = (asset: UniqueAsset) => {
-    setSelectedAsset(asset);
-    dispatch(toggleDeleteModal());
   };
 
   return (
@@ -107,27 +92,16 @@ export default function AssetsCards({ assets, setSelectedAsset, setEditFormData 
                   <Eye className="h-4 w-4 mr-2" />
                   View Details
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleEdit(asset)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit Asset
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleMove(asset)}>
                   <Tag className="h-4 w-4 mr-2" />
                   Move Asset
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleAssign(asset)}>
-                  <UserCheck className="h-4 w-4 mr-2" />
-                  {asset.status === "In Use"
-                    ? "Return Asset"
-                    : "Assign Asset"}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-red-600"
-                  onClick={() => handleDelete(asset)}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Asset
-                </DropdownMenuItem>
+                {asset.status === "Not In Use" && (
+                  <DropdownMenuItem onClick={() => handleAssign(asset)}>
+                    <UserCheck className="h-4 w-4 mr-2" />
+                    Assign Asset
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
