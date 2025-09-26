@@ -221,6 +221,7 @@ export default function LoginPage() {
             <div className="flex flex-col justify-center">
               <p>Payroll Number: A001</p>
               <p>Password: StrongPass123.</p>
+              <p>Default password for users who's account was created by admin: Password10</p>
             </div>
           </div>
         </CardContent>
