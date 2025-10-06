@@ -124,7 +124,7 @@ const transformApiAsset = (apiAsset: ApiUniqueAsset): UniqueAsset => ({
     ? apiAsset.currentAssignment.assignedToName
     : "Not Assigned",
   status: apiAsset.individualStatus === "in_use" ? "In Use" : "Not In Use" as "In Use" | "Not In Use",
-  keeper: apiAsset.keeper ? `${apiAsset.keeper.firstName} ${apiAsset.keeper.lastName}` : "N/A",
+  keeper: "ICT Manager",
 });
 
 const fetchUniqueAssets = async (

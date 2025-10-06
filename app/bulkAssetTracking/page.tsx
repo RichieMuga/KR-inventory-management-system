@@ -72,7 +72,7 @@ interface BulkAssetsResponse {
 const transformApiBulkAsset = (apiAsset: ApiBulkAsset): BulkAsset => ({
   id: apiAsset.assetId,
   name: apiAsset.name,
-  issuedBy: apiAsset.keeper?.fullName || "N/A",
+  issuedBy:  "Store Keeper",
   department: apiAsset.location ? `${apiAsset.location.regionName} - ${apiAsset.location.departmentName}` : "N/A",
   issuedTo: apiAsset.keeper?.fullName || "N/A",
   signatory: apiAsset.keeper?.fullName || "N/A",
