@@ -91,7 +91,7 @@ export default function BulkAssetsTable({
             </TableHead>
             <TableHead className="text-white">Department</TableHead>
             <TableHead className="text-white">Issued To</TableHead>
-            <TableHead className="text-white">Signatory</TableHead>
+            <TableHead className="text-white">Signed By</TableHead>
             <TableHead className="text-white">Timestamp</TableHead>
             <TableHead className="text-white">Quantity</TableHead>
             <TableHead className="text-white">Status</TableHead>
