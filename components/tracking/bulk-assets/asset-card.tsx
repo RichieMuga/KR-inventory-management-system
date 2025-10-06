@@ -118,7 +118,7 @@ export default function BulkAssetsCards({
               <span className="font-medium">{asset.issuedTo}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Signatory:</span>
+              <span className="text-gray-600">Signed By:</span>
               <span className="font-medium">{asset.signatory}</span>
             </div>
             <div className="flex justify-between">
